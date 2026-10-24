@@ -30,11 +30,12 @@ export function startServer(runner: Runner, port: number): WebSocketServer {
       if (msg.type === "pause") runner.pause("kézi szünet");
       else if (msg.type === "resume") runner.start();
       else if (msg.type === "speed" && msg.secondsPerDay >= 10 && msg.secondsPerDay <= 3600) {
-        runner.secondsPerDay = msg.secondsPerDay;
+        runner.setSpeed(msg.secondsPerDay);
       }
-      broadcast({ type: "status", status: runner.status() });
     });
   });
+
+  runner.onStatus(() => broadcast({ type: "status", status: runner.status() }));
 
   runner.onTick((r, world) => {
     broadcast({

@@ -45,6 +45,11 @@ export function createWorld(seed: string, villagers: VillagerSeed[]): World {
   return { map, state: { seed, tick: 0, rngState: Rng.fromSeed(seed).state, agents, stocks } };
 }
 
+/** Világ visszaállítása snapshotból (a térkép kódból épül újra). */
+export function restoreWorld(state: WorldState): World {
+  return { map: buildVillageMap(), state: structuredClone(state) };
+}
+
 /** Egy tick előreléptetése. Determinisztikus: ugyanabból az állapotból ugyanaz jön ki. */
 export function stepWorld(world: World, decide: Decider = autopilotDecide): StepResult {
   const { state, map } = world;

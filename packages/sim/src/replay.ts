@@ -1,0 +1,39 @@
+import { restoreWorld, stepWorld, type SimEvent, type World } from "@falu/core";
+import type { EventStore } from "./store";
+
+/** Világ a futás `fromTick` előtti legutóbbi snapshotjából, odaléptetve `fromTick`-ig. */
+export function worldAt(store: EventStore, runId: number, fromTick: number): World {
+  const snap = store.loadSnapshot(runId, fromTick);
+  if (!snap) throw new Error(`Nincs snapshot a(z) ${runId}. futáshoz`);
+  const world = restoreWorld(snap);
+  while (world.state.tick < fromTick) stepWorld(world);
+  return world;
+}
+
+export interface VerifyResult {
+  ok: boolean;
+  ticks: number;
+  events: number;
+  firstMismatch?: { index: number; expected?: SimEvent; actual?: SimEvent };
+}
+
+/**
+ * Determinizmus-ellenőrzés: a futást a seedből (0. tick snapshot) újraszimulálja,
+ * és összeveti a naplóval eseményről eseményre.
+ */
+export function verifyRun(store: EventStore, runId: number): VerifyResult {
+  const run = store.getRun(runId);
+  if (!run) throw new Error(`Nincs ilyen futás: ${runId}`);
+  const logged = store.events(runId);
+  const world = worldAt(store, runId, 0);
+  const actual: SimEvent[] = [];
+  const endTick = run.lastTick + 1;
+  while (world.state.tick < endTick) actual.push(...stepWorld(world).events);
+  const n = Math.max(logged.length, actual.length);
+  for (let i = 0; i < n; i++) {
+    if (JSON.stringify(logged[i]) !== JSON.stringify(actual[i])) {
+      return { ok: false, ticks: endTick, events: logged.length, firstMismatch: { index: i, expected: logged[i], actual: actual[i] } };
+    }
+  }
+  return { ok: true, ticks: endTick, events: logged.length };
+}

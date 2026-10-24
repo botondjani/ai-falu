@@ -17,6 +17,8 @@ export interface SimStatus {
   running: boolean;
   speed: number; // valós másodperc / szimulált nap
   pausedReason?: string;
+  mode: "élő" | "visszajátszás";
+  runId?: number;
 }
 
 export type ServerMessage =

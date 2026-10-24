@@ -50,7 +50,9 @@ export function App() {
           <div className="clock">
             {formatTime(time)} · {time.phase}
           </div>
-          <div className={`conn ${state.connected ? "ok" : "bad"}`}>{state.connected ? "élő" : "nincs kapcsolat…"}</div>
+          <div className={`conn ${state.connected ? "ok" : "bad"}`}>
+            {state.connected ? `${state.status?.mode ?? "élő"} · #${state.status?.runId ?? "?"}` : "nincs kapcsolat…"}
+          </div>
         </header>
 
         <section className="controls">
