@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SimEvent, TileMap } from "@falu/core";
-import type { AgentView, ClientMessage, LlmStats, MarketView, ServerMessage, SimStatus, Summary } from "@falu/sim";
+import type { AgentView, ClientMessage, LlmStats, MarketView, ProfileView, ServerMessage, SimStatus, Summary } from "@falu/sim";
 
 export interface TickFrame {
   tick: number;
@@ -21,6 +21,7 @@ export interface SimState {
   market: MarketView | null;
   /** null: nincs nyitva; "loading": készül; különben a kész összefoglaló. */
   summary: Summary | "loading" | null;
+  profile: ProfileView | null;
 }
 
 const WS_URL = import.meta.env.VITE_SIM_WS ?? `ws://${location.hostname}:8787`;
@@ -40,6 +41,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     llm: null,
     market: null,
     summary: null,
+    profile: null,
   });
   const wsRef = useRef<WebSocket | null>(null);
   const frameRef = useRef(onFrame);
@@ -70,6 +72,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             llm: msg.status.llm ?? null,
             market: msg.market,
             summary: msg.tick - msg.lastSeenTick >= SUMMARY_MIN_TICKS ? "loading" : null,
+            profile: null,
           });
           if (msg.tick - msg.lastSeenTick >= SUMMARY_MIN_TICKS) ws.send(JSON.stringify({ type: "summary", mode: "since_seen" }));
           frameRef.current({ tick: msg.tick, tickMs: 0, agents: msg.agents, moves: {}, events: [] });
@@ -83,6 +86,8 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             market: msg.market,
             events: msg.events.length ? [...s.events, ...msg.events].slice(-MAX_EVENTS) : s.events,
           }));
+        } else if (msg.type === "profile") {
+          setState((s) => ({ ...s, profile: msg.profile }));
         } else if (msg.type === "summary") {
           setState((s) => ({ ...s, summary: msg.summary }));
         } else if (msg.type === "status") {
@@ -121,5 +126,6 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     send({ type: "summary", mode });
   };
   const closeSummary = () => setState((s) => ({ ...s, summary: null }));
-  return { state, send, requestSummary, closeSummary };
+  const requestProfile = (agentId: string) => send({ type: "profile", agentId });
+  return { state, send, requestSummary, closeSummary, requestProfile };
 }

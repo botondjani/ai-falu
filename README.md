@@ -1,107 +1,139 @@
 # Falu
 
-LLM-vezérelt lakók egy pixeles kis faluban. A világot determinisztikus kód viszi (idő, mozgás, készlet, pénz, éhség), az LLM csak dönt.
+15 LLM-vezérelt lakó egy pixeles kis faluban: dolgoznak, kereskednek, pletykálnak, barátkoznak, összevesznek. Te főleg nézed, néha beleszólsz. A legjobb rész az **„Amíg nem néztél oda”**: visszatéréskor a krónikás elmeséli, mi történt.
 
-> Fejlesztés alatt, a lépések állapota lent.
+**Alapelv:** a világot determinisztikus kód viszi (idő, mozgás, útkeresés, éhség, pénz, készlet, árak), az LLM csak dönt (mit csináljon a lakó, mit mondjon, mit gondoljon).
 
-## Futtatás
+## Gyors indítás
 
 ```bash
 npm install
-npm run sim                        # élő szimuláció, WS: ws://localhost:8787
-npm run viewer                     # másik terminálban: http://localhost:5173
-npm run sim -- --days 5 --mock     # headless, gyors futás, összegzéssel
-npm test                           # egységtesztek
+npm run sim                     # élő szimuláció (WebSocket: ws://localhost:8787)
+npm run viewer                  # másik terminálban → http://localhost:5173
+```
+
+**API-kulcs nélkül is működik:** ha nincs `ANTHROPIC_API_KEY`, automatikusan **mock módban** fut. A lakók determinisztikus, jellemhez illő döntéseket hoznak, sablonos párbeszédeket folytatnak, a költségszámláló pedig mutatja, mennyibe került volna valódi API-val. Valódi LLM-hez másold a `.env.example`-t `.env`-be, és add meg a kulcsot.
+
+```bash
+npm run sim -- --days 5 --mock  # headless, kb. 1-2 mp, összegzéssel
+npm test                        # egységtesztek (vitest)
 npm run typecheck
 ```
 
-**API-kulcs nélkül is működik:** ha nincs `ANTHROPIC_API_KEY`, a szimuláció automatikusan mock módban fut (autopilot + mock LLM), költség nélkül.
+### CLI
 
-### Lakosság
+| Kapcsoló | Leírás |
+|---|---|
+| `--days N` | headless futás N napig, összegzéssel |
+| `--mock` | LLM nélkül (kulcs nélkül ez az alap) |
+| `--speed MP` | valós másodperc / szimulált nap (alap 600 = 10 perc) |
+| `--seed S` | seed (alap: `falu`) |
+| `--llm-agents L` | LLM-mel gondolkodó lakók: `all` (alap) vagy vesszős lista; a többi autopiloton fut |
+| `--demo` | csak 3 lakó |
+| `--event "N:H:szöveg"` | Isten-mód esemény N. nap H órakor (forgatókönyvekhez, többször is megadható) |
+| `--list-runs` | futások listája |
+| `--resume [ID]` | futás folytatása az utolsó snapshotból |
+| `--replay ID [--from-day D]` | visszajátszás a viewerben (API-hívás nélkül) |
+| `--verify ID` | újraszimulálás és eseményenkénti összevetés a naplóval |
+| `--summary ID [--from-day D]` | „Amíg nem néztél oda” a terminálban |
+| `--db FILE`, `--port P`, `-v` | SQLite fájl, WS port, minden esemény kiírása |
 
-A falu 15 lakója a `packages/core/src/seed/villagers.json` fájlban van: név, kor, foglalkozás, jellem, titkos vágy, kapcsolatok, otthon és munkahely. A fájl LLM-mel készült, és rögzítve van, ezért minden futás ugyanabból indul. Újragenerálás (API-kulccsal, egy Sonnet-hívás, kb. $0.05):
+## Költségbecslés
 
-```bash
-npm run generate-villagers -- --count 15 --theme "egy kicsit misztikus falu"
-```
+15 lakó egy szimulált napja nagyjából **90 LLM-hívás**:
 
-`--demo` kapcsolóval csak a 3 demó lakó fut.
+| Hívás | Modell | Db / nap | Kb. token (be / ki) | Kb. $ / nap |
+|---|---|---|---|---|
+| Napi terv (6:00) | Haiku 5.5, effort low | 15 | 1k / 0.5k | 0.005 |
+| Döntés váratlan helyzetben | Haiku 5.5, effort low | ~30 | 1.2k / 0.3k | 0.008 |
+| Beszélgetés (egy hívás az egész párbeszéd) | Haiku 5.5, effort low | ~30 | 1.5k / 0.6k | 0.013 |
+| Esti reflexió (21:30) | Sonnet 5.5, effort low | 15 | 1.5k / 0.6k | 0.14 |
+| **Összesen** | | **~90** | | **≈ $0.15–0.30 / szimulált nap** |
 
-### Napló és visszajátszás
+- 10 perces napokkal ez óránként kb. **$1–2** folyamatos futásnál. Egy „Amíg nem néztél oda” összefoglaló kb. $0.02 (Sonnet), az Isten-mód esemény kb. $0.01.
+- A költség zömét a Sonnet-reflexió adja. `LLM_MODEL_STRONG=claude-haiku-5-5` mellett minden Haikun fut, így **≈ $0.03–0.05 / nap**.
+- A becslés a mock mód tokenmérésén alapul, a gondolkodási tokenekre ráhagyással. A pontos költést a viewer költségpanelje és az `llm_calls` tábla mutatja.
+- **Költségkeret:** összes költés futásonként, napi valós költés és hívás/szimulált nap. A keret elérésekor a szimuláció szünetel; `LLM_ON_BUDGET=autopilot` mellett LLM nélkül fut tovább.
 
-Minden esemény egy append-only SQLite naplóba kerül (`data/falu.db`), naponta snapshottal. A futás seedelt és determinisztikus, ezért bármikor pontosan újrajátszható.
+Mitől olcsó:
+- A rutint (alvás, evés, munkába járás, vásárlás éhség esetén) szabály-alapú autopilot viszi, LLM nélkül.
+- A napi tervet a lakó LLM nélkül követi. Csak terv nélküli időben vagy váratlan esemény után (fontos új emlék: pletyka, Isten-mód, suttogás) kérdezi az LLM-et.
+- A beszélgetés egyetlen hívás (az egész párbeszéd + emlékek + véleményváltozás + pletyka).
+- **Prompt caching:** a világszabályok és a személyleírás stabil prefix `cache_control` breakpointtal, a változó helyzet utána jön.
 
-```bash
-npm run sim -- --list-runs                 # futások
-npm run sim -- --replay 1 --from-day 3     # visszajátszás a viewerben a 3. naptól
-npm run sim -- --verify 1                  # újraszimulál és eseményről eseményre összeveti a naplóval
-npm run sim -- --resume                    # a legutóbbi futás folytatása az utolsó snapshotból
-npm run sim -- --help                      # minden kapcsoló
-```
+## Konfiguráció (`.env`)
 
-## LLM-döntések és költség
+| Változó | Alap | Leírás |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | nélküle mock mód |
+| `LLM_MODEL_ROUTINE` | `claude-haiku-5-5` | terv, döntés, beszélgetés |
+| `LLM_MODEL_STRONG` | `claude-sonnet-5-5` | reflexió, összefoglaló, Isten-mód |
+| `LLM_MAX_USD_TOTAL` | 5 | futásonkénti keret ($) |
+| `LLM_MAX_USD_PER_DAY` | 2 | valós napi keret ($), minden futásra együtt |
+| `LLM_MAX_CALLS_PER_SIM_DAY` | 600 | hívás / szimulált nap |
+| `LLM_ON_BUDGET` | `pause` | `pause` vagy `autopilot` |
+| `SIM_LLM_AGENTS` | `all` | ki gondolkodik LLM-mel |
+| `SIM_SECONDS_PER_DAY` | 600 | sebesség |
+| `SIM_SEED`, `SIM_PORT`, `SIM_DB` | `falu`, 8787, `data/falu.db` | |
+| `VITE_SIM_WS` | `ws://<host>:8787` | viewer → szimuláció |
 
-A lakók rutinját (alvás, evés, munkába járás) a szabály-alapú **autopilot** viszi. LLM-hívás csak **döntési ponton** történik: amikor a lakó szabad, nincs sürgős szükséglete, és lejárt az előző döntése. Az LLM egy zárt menüből választ (tevékenység + helyszín + időtartam + egy mondat, amit kimond). A kimenet JSON-sémás (`output_config.format`), és zoddal validálódik. Hibánál egy újrapróba jön, utána biztonságos autopilot-tartalék.
+## A viewer
 
-- Modellek: `claude-haiku-5-5` a rutindöntésekhez (`effort: low`), `claude-sonnet-5-5` a későbbi reflexióhoz és összefoglalóhoz.
-- Prompt caching: világszabályok + személyleírás = stabil prefix, `cache_control` breakpointtal; a helyzet utána jön.
-- **Költségkeret:** összes költés, napi valós költés és hívás/szimulált nap. A keret elérésekor a szimuláció szünetel (`LLM_ON_BUDGET=autopilot` esetén LLM nélkül fut tovább).
-- **Mock mód:** API-kulcs nélkül automatikusan ez megy. A lakók determinisztikus, jellemhez illő döntéseket hoznak, a költségszámláló pedig megmutatja, mennyibe került volna valódi API-val.
-- Minden hívás az `llm_calls` táblába kerül (tokenek, költség, késleltetés, hiba). A döntések az `inputs` táblába, ezért visszajátszáskor nincs API-hívás.
+- **Térkép:** kódból generált pixel-art falu (házak, kocsma, bolt, pékség, kovácsműhely, tér, mező, erdő, folyó), mozgó lakók, beszédbuborékok (a párbeszédek soronként), napszak szerinti sötétedés. A lakóra kattintva megnyílik a profilja.
+- **Kapcsolatok:** irányított gráf (A véleménye B-ről; zöld jó, piros rossz, vastagság = erősség). A kör mérete a hírnév, vagyis mások átlagos véleménye. Szimpátia és bizalom között lehet váltani, a küszöb állítható.
+- **Lakó-profil:** jellem, titkos vágy, hangulat, hírnév, mai terv (az aktuális lépés kiemelve), emlékek típus szerint szűrve (megfigyelés, beszélgetés, pletyka, reflexió, terv), kapcsolatok mindkét irányból, róla szóló és általa ismert pletykák (hányan tudják).
+- **Oldalsáv:** óra, szünet és sebesség, ⚡ Isten-mód, LLM-költség, piac (árak, készletek), lakók (🧠 LLM, 📋 terv, ⚙ autopilot, ⚡ Isten-mód, ⚠ tartalék), eseményfolyam.
+- **📜 Amíg nem néztél oda:** visszatéréskor automatikusan megjelenik, a „Mi történt?” gomb az elmúlt napot foglalja össze.
 
-### Memória, terv, reflexió
+## Hogyan működik
 
-- **Memória** (Generative Agents mintájára): a lakók megfigyelései a fontos eseményekből jönnek (kód, fontosság szabály szerint). Visszakereséskor a pontszám = frissesség (óránként 0.98-as lecsengés) + fontosság/10 + 1.5 × relevancia. A relevanciát kulcsszó-egyezéssel számoljuk (embedding nincs, olcsó és determinisztikus). A régi, kis jelentőségű megfigyelések naponta törlődnek.
-- **Napi terv** (reggel 6:00, Haiku): 3–7 időrendi lépés. Amíg a terv lefedi az időt és nem történik semmi váratlan, a lakó **LLM nélkül** követi.
-- **Váratlan helyzet**: egy fontos (≥5) új emlék után a következő döntést újra az LLM hozza.
-- **Esti reflexió** (21:30, Sonnet): 1–3 magasabb szintű tanulság fontossággal („Béla nem megbízható”) és hangulat.
-
-### Beszélgetés, kapcsolatok, pletyka
-
-- Ha két ráérő lakó (pihen, szórakozik, sétál) ugyanott van, kis eséllyel beszélgetni kezdenek: a kocsmában és a téren gyakrabban, mint máshol. Párokra 3 órás, lakóra 1 órás cooldown van. A jelölteket determinisztikusan választjuk (seed + tick).
-- Egy beszélgetés **egy** Haiku-hívás: 4–6 replika felváltva, mindkét fél emléke, véleményváltozás (bizalom, szimpátia; legfeljebb ±15) és opcionálisan pletyka egy harmadik lakóról.
-- **Kapcsolatok:** irányított vélemények (A → B) -100..100 között, kezdetben a seed-kapcsolatokból.
-- **Pletyka:** azonosítóval terjed. Aki hallja, emléket kap (fontosság 5, ezért a következő döntését az LLM hozza), és romlik vagy javul a véleménye az alanyról. Csak az a pletyka adható tovább, amit a mondó tényleg ismer.
+### Világ és idő
+- 48×32-es csempetérkép, 1 tick = 5 játékperc, 288 tick egy nap; a szimuláció reggel 6-kor indul. A* útkeresés csempeköltséggel (út olcsó, erdő drága, víz és fal járhatatlan).
+- Éhség és energia; éjjel alvás, éhesen evés (otthon, boltban vásárolva vagy a kocsmában).
 
 ### Gazdaság
+- **Termelési láncok:** mező → gabona; pék: gabona → kenyér; erdő → fa; kovács: fa → szerszám; folyó → hal; füvesasszony → gyógyfű. Szerszámmal többet lehet termelni, de a szerszám néha eltörik, ebből van kereslet rá.
+- **Bolt = piac:** a termelők eladják a fölösleget, a lakók itt vásárolnak. Ár = alapár × √(célkészlet / készlet), 0.5× és 2.5× között; a bolt az ár 70%-áért vásárol fel.
+- **Városi vásár:** reggelente a fölösleg a városba megy (külső piac, pénzforrás), így a bolt nem telik meg.
+- **Kocsma:** étel a saját készletből. **Bér:** a bíró és a tanítónő a falutól, a zenész a kocsmárostól kap.
 
-- **Termelési láncok** (óránként): mező → gabona; pék: 1 gabona → 2 kenyér; erdő → fa; kovács: 1 fa → 1 szerszám; folyó → hal; füvesasszony → gyógyfű. Szerszámmal a földműves, a favágó és a halász többet termel, de a szerszám néha eltörik. Ebből jön a szerszám iránti kereslet.
-- **Bolt = piac:** a termelők eladják a fölösleget a boltnak, a lakók ott vesznek kenyeret, a pék és a kovács ott veszi az alapanyagot. Az ár a készlettől függ: alapár × √(célkészlet / készlet), 0.5× és 2.5× között. A bolt az ár 70%-áért vásárol fel, a különbözet a boltos haszna.
-- **Városi vásár:** reggelente a célszint másfélszerese fölötti készletet a boltos elviszi a városba (alapár 50%-áért). Ez a falu külső piaca és pénzforrása; enélkül a bolt megtelik, és a termelők pénz nélkül maradnak.
-- **Kocsma:** az étel a kocsma készletéből megy (kenyér vagy hal, a kenyér ára + 3 tallér), a kocsmáros a boltból tölti fel.
-- **Bér:** a bíró és a nyugdíjas tanítónő órabért kap a falutól, a zenészt a kocsmáros fizeti.
-- Éhes lakó: otthoni étel, ha nincs, akkor vásárlás a boltban, ha az sincs, akkor a kocsma. Az LLM is választhatja a `vásárol` tevékenységet; a promptban benne vannak az aktuális árak.
-
-### „Amíg nem néztél oda”
-
-- A szerver tárolja, mikor nézted utoljára a falut (a viewer bezárása vagy háttérbe kerülése számít). Visszatéréskor, ha legalább egy játékóra eltelt, automatikusan megjelenik az összefoglaló. A **📜 Mi történt?** gomb az elmúlt napot foglalja össze.
-- Menete: a naplóból determinisztikusan **pontozott tények** lesznek (pletyka terjedése, megromlott vagy javult kapcsolat, éhezés, árváltozás, nagy kereset, reflexiók, Isten-mód események), a legfontosabb 25-ből pedig **egy Sonnet-hívás** ír 5–10 mondatos, színes, kicsit humoros elbeszélést, és kiválasztja a 3 legfontosabb eseményt (sorszámmal, hogy ne találjon ki semmit).
-- Mock módban és hiba esetén sablonos elbeszélés készül ugyanazokból a tényekből. Az összefoglalók gyorsítótárazva vannak.
-- Terminálból: `npm run sim -- --summary 1 --from-day 2`
+### Lakók és elme
+- 15 lakó a `packages/core/src/seed/villagers.json` fájlban (név, kor, foglalkozás, jellem, titkos vágy, kapcsolatok). A fájl LLM-mel készült és rögzítve van; újragenerálás: `npm run generate-villagers -- --count 15 --theme "..."`.
+- **Memória** (Generative Agents mintájára): megfigyelések szabály szerinti fontossággal. Visszakereséskor a pontszám = frissesség (óránként 0.98-as lecsengés) + fontosság/10 + 1.5 × relevancia (kulcsszó-egyezés). A régi, kis jelentőségű emlékek naponta törlődnek.
+- **Napi terv** (6:00): 3–7 lépés. **Esti reflexió** (21:30): 1–3 magasabb szintű tanulság fontossággal („Béla nem megbízható.”) és hangulat.
+- **Beszélgetés:** ráérő lakók egy helyen (a kocsmában és a téren gyakrabban), cooldownnal. Egy hívásban 4–6 replika, mindkét fél emléke, véleményváltozás (±15) és opcionálisan pletyka.
+- **Pletyka** azonosítóval terjed. Aki hallja, emléket kap, és megváltozik a véleménye az alanyról; csak az adható tovább, amit a mondó ismer.
+- Minden LLM-kimenet JSON-sémás (`output_config.format`, zod), szemantikailag validált. Hibánál egy újrapróba jön (a hibaüzenettel), utána biztonságos tartalék (autopilot vagy sablon).
 
 ### Isten-mód
+- **Esemény:** egy Sonnet-hívás a szöveget mechanikus hatásokra fordítja (hazamenekülés, gyűlés, készlet, pénz, hangulat, új lakó érkezése). Minden érintett fontos emléket kap. Kulcs nélkül kulcsszavas értelmezés fut.
+- **Suttogás:** egy gondolat a lakó fejében, ami befolyásolja a következő döntését és a beszélgetéseit.
 
-A viewer **⚡ Isten-mód** paneljén:
-- **Esemény bedobása** szövegesen („vihar jön”, „egy idegen érkezik a faluba”, „bál lesz a téren”). Egy Sonnet-hívás lefordítja a szöveget mechanikus hatásokra: hazamenekülés N órára, gyűlés egy helyen, bolti vagy kocsmai készletváltozás, pénz, hangulat, új lakó érkezése (a kocsmában száll meg). Minden érintett fontos emléket kap, ezért a következő döntéseiket az LLM hozza.
-- **Suttogás** egy lakónak: egy gondolat a fejében („Valaki tudja a titkodat.”), ami befolyásolja a döntéseit és a beszélgetéseit.
-- Az értelmezett esemény rögzített bemenet, ezért visszajátszáskor ugyanúgy történik meg. API-kulcs nélkül kulcsszavas értelmezés fut (vihar, idegen, ünnep, tűz, kincs).
-- Terminálból, forgatókönyvként: `npm run sim -- --days 3 --event "1:14:Hatalmas vihar jön" --event "2:10:Egy idegen érkezik"`
+### „Amíg nem néztél oda”
+- A szerver tárolja az utolsó megtekintést. A naplóból determinisztikusan pontozott **tények** készülnek (pletyka-terjedés, megromlott vagy javult kapcsolat, éhezés, árváltozás, kereset, reflexiók, Isten-mód), ezekből egy Sonnet-hívás 5–10 mondatos, színes, kicsit humoros elbeszélést ír, és sorszámmal kiemeli a 3 legfontosabbat. Az összefoglalók gyorsítótárazva vannak.
 
-Melyik lakó dönt LLM-mel: `--llm-agents joska` (alap), `--llm-agents bela,mari` vagy `--llm-agents all`.
-
-Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_ROUTINE`, `LLM_MODEL_STRONG`, `LLM_MAX_USD_TOTAL` (5), `LLM_MAX_USD_PER_DAY` (2), `LLM_MAX_CALLS_PER_SIM_DAY` (600), `LLM_ON_BUDGET` (`pause`|`autopilot`).
+### Napló, determinizmus, visszajátszás
+- Minden esemény append-only **SQLite** naplóba kerül (`events`), napi snapshottal (`snapshots`). A külső bemenetek (LLM-döntés, terv, reflexió, beszélgetés, Isten-mód, suttogás) az `inputs` táblába, a hívások részletei az `llm_calls` táblába mennek.
+- A szimuláció seedelt és determinisztikus: a seedből és a rögzített bemenetekből bármely futás pontosan újrajátszható, API-hívás nélkül (`--verify` ezt ellenőrzi).
 
 ## Felépítés
 
 | Csomag | Feladat |
 |---|---|
-| `packages/core` | Determinisztikus világ: térkép, idő (1 tick = 5 perc, 288 tick/nap), A* útkeresés, készlet, seedelt RNG, autopilot, eseménytípusok. I/O nélkül. |
-| `packages/sim` | Futtató: tick-loop, SQLite eseménynapló + snapshotok, visszajátszás, WebSocket-szerver, CLI. |
-| `packages/viewer` | Vite + React + PixiJS élő nézet, kódból generált pixel-art csempékkel. |
+| `packages/core` | Determinisztikus világ, I/O nélkül: térkép, idő, A*, RNG, készlet, gazdaság, autopilot, memória, kapcsolatok és pletyka, Isten-mód hatások, eseménytípusok. |
+| `packages/sim` | Futtató: tick-loop, LLM-gateway (Anthropic és mock, keret, validálás), elme (terv, döntés, beszélgetés, reflexió, Isten-mód), összefoglaló, SQLite napló, visszajátszás, WebSocket-szerver, CLI. |
+| `packages/viewer` | Vite + React + PixiJS élő nézet, SVG kapcsolati gráf, profilpanel. |
+
+## Egyszerűsítések
+
+- A relevancia kulcsszó-egyezés, embedding nincs (olcsó és determinisztikus).
+- A kereskedés a boltban kódból történik (a termelő „leszállítja” a fölösleget). Az LLM a vásárlás idejét választja meg, az alkut nem.
+- Évszakok még nincsenek, csak napszakok.
+- Egyszerre egy viewer és egy futás feltételezett (az utolsó megtekintés futásonként egy érték).
 
 ## Állapot
 
-- [x] 1. Tile-világ, időmotor, 3 szabály-alapú lakó, élő viewer
+- [x] 1. Tile-világ, időmotor, szabály-alapú lakók, élő viewer
 - [x] 2. SQLite eseménynapló, visszajátszás
 - [x] 3. LLM-döntés, mock mód, költségszámláló
 - [x] 4. Memória, reflexió, napi terv
@@ -109,4 +141,4 @@ Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_R
 - [x] 6. Gazdaság
 - [x] 7. „Amíg nem néztél oda”
 - [x] 8. Isten-mód
-- [ ] 9. Kapcsolati gráf, lakóprofil
+- [x] 9. Kapcsolati gráf, lakóprofil

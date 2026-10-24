@@ -1,7 +1,7 @@
-import { SHOP, TAVERN, TICKS_PER_DAY, currentPrices, knownGossip, mealPrice, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
+import { SHOP, TAVERN, TICKS_PER_DAY, currentPrices, getRelation, knownGossip, mealPrice, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
 import type { InputProvider } from "./agents/mind";
 import { BudgetExceededError, type LlmStats } from "./llm/gateway";
-import type { AgentView, MarketView, SimStatus } from "./protocol";
+import type { AgentView, MarketView, ProfileView, SimStatus } from "./protocol";
 import type { EventStore } from "./store";
 
 export interface RunnerOptions {
@@ -172,6 +172,40 @@ export class Runner {
   /** Leállításkor snapshot, hogy a folytatás ne a nap elejéről induljon. */
   flush() {
     if (this.store && this.runId !== undefined) this.store.saveSnapshot(this.runId, this.world.state);
+  }
+
+  /** Részletes lakó-profil a viewer profilpaneljéhez. */
+  profile(agentId: string): ProfileView | null {
+    const st = this.world.state;
+    const a = st.agents.find((x) => x.id === agentId);
+    if (!a) return null;
+    const others = st.agents.filter((o) => o.id !== a.id);
+    const incoming = others.map((o) => getRelation(st, o.id, a.id)).filter((r) => r.trust !== 0 || r.liking !== 0);
+    const avg = (k: "trust" | "liking") => (incoming.length ? Math.round(incoming.reduce((s, r) => s + r[k], 0) / incoming.length) : 0);
+    const mine = st.memories.filter((m) => m.agentId === a.id);
+    const reflections = mine.filter((m) => m.kind === "reflexió").slice(-15);
+    const recent = mine.slice(-25);
+    const important = [...mine].sort((x, y) => y.importance - x.importance || y.tick - x.tick).slice(0, 15);
+    const memories = [...new Map([...reflections, ...recent, ...important].map((m) => [m.id, m])).values()].sort((x, y) => y.tick - x.tick || y.id - x.id);
+    return {
+      id: a.id,
+      name: a.name,
+      age: a.age,
+      occupation: a.occupation,
+      traits: a.traits,
+      secretDesire: a.secretDesire,
+      homeId: a.homeId,
+      workplaceId: a.workplaceId,
+      mood: a.mood,
+      plan: a.plan && { goal: a.plan.goal, items: a.plan.items },
+      reputation: { trust: avg("trust"), liking: avg("liking"), count: incoming.length },
+      relations: others
+        .map((o) => ({ with: o.id, out: getRelation(st, a.id, o.id), in: getRelation(st, o.id, a.id) }))
+        .filter((r) => r.out.trust || r.out.liking || r.in.trust || r.in.liking),
+      gossip: knownGossip(st, a.id).map((g) => ({ id: g.id, aboutId: g.aboutId, text: g.text, sentiment: g.sentiment, spread: g.knownBy.length, origin: g.originId === a.id })),
+      gossipAbout: st.gossip.filter((g) => g.aboutId === a.id).map((g) => ({ id: g.id, text: g.text, sentiment: g.sentiment, spread: g.knownBy.length })),
+      memories: memories.map((m) => ({ id: m.id, tick: m.tick, kind: m.kind, text: m.text, importance: m.importance })),
+    };
   }
 
   market(): MarketView {

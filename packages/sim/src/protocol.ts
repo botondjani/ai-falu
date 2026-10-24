@@ -40,6 +40,27 @@ export interface MarketView {
   mealPrice: number;
 }
 
+export interface ProfileView {
+  id: string;
+  name: string;
+  age: number;
+  occupation: string;
+  traits: string[];
+  secretDesire: string;
+  homeId: string;
+  workplaceId: string;
+  mood?: string;
+  plan?: { goal: string; items: { fromHour: number; toHour: number; kind: string; locationId: string; goal: string }[] };
+  /** Mások átlagos véleménye róla (a nem semlegesekből). */
+  reputation: { trust: number; liking: number; count: number };
+  /** Ő hogyan látja a többieket, és ők őt. */
+  relations: { with: string; out: { trust: number; liking: number }; in: { trust: number; liking: number } }[];
+  gossip: { id: number; aboutId: string; text: string; sentiment: string; spread: number; origin: boolean }[];
+  /** Pletykák róla, és hányan tudnak róluk. */
+  gossipAbout: { id: number; text: string; sentiment: string; spread: number }[];
+  memories: { id: number; tick: number; kind: string; text: string; importance: number }[];
+}
+
 export type ServerMessage =
   | {
       type: "init";
@@ -62,7 +83,8 @@ export type ServerMessage =
       market: MarketView;
     }
   | { type: "status"; status: SimStatus }
-  | { type: "summary"; summary: Summary };
+  | { type: "summary"; summary: Summary }
+  | { type: "profile"; profile: ProfileView | null };
 
 export type ClientMessage =
   | { type: "pause" }
@@ -71,4 +93,5 @@ export type ClientMessage =
   | { type: "summary"; mode: "since_seen" | "last_day" }
   | { type: "seen" }
   | { type: "god"; text: string }
-  | { type: "whisper"; agentId: string; text: string };
+  | { type: "whisper"; agentId: string; text: string }
+  | { type: "profile"; agentId: string };

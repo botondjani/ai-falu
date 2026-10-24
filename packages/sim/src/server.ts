@@ -41,6 +41,7 @@ export function startServer(runner: Runner, port: number, summaries?: SummarySer
       else if (msg.type === "speed" && msg.secondsPerDay >= 10 && msg.secondsPerDay <= 3600) {
         runner.setSpeed(msg.secondsPerDay);
       } else if (msg.type === "seen") summaries?.markSeen();
+      else if (msg.type === "profile") send(ws, { type: "profile", profile: runner.profile(msg.agentId) });
       else if (msg.type === "god" && god && typeof msg.text === "string" && msg.text.trim()) god.god(msg.text.trim());
       else if (msg.type === "whisper" && god && typeof msg.text === "string" && msg.text.trim()) god.whisper(msg.agentId, msg.text.trim());
       else if (msg.type === "summary" && summaries) {

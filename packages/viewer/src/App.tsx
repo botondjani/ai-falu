@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeEvent, formatTime, lookupFrom, tickToTime, type DecisionSource } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
+import { RelationGraph } from "./Graph";
+import { ProfileDrawer } from "./Profile";
 import type { AgentView, ClientMessage, LlmStats, MarketView, Summary } from "@falu/sim";
 
 /** Ezek túl gyakoriak a feedhez. */
@@ -22,7 +24,17 @@ export function App() {
   const onFrame = useCallback((f: TickFrame) => {
     rendererRef.current?.frame(f.tick, f.tickMs, f.agents, f.moves, f.events);
   }, []);
-  const { state, send, requestSummary, closeSummary } = useSim(onFrame);
+  const { state, send, requestSummary, closeSummary, requestProfile } = useSim(onFrame);
+  const [view, setView] = useState<"map" | "graph">("map");
+
+  // A kiválasztott lakó profilját frissen tartjuk, amíg nyitva van.
+  useEffect(() => {
+    if (!selected) return;
+    requestProfile(selected);
+    const t = setInterval(() => requestProfile(selected), 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, state.connected]);
 
   useEffect(() => {
     const r = new VillageRenderer(hostRef.current!);
@@ -40,6 +52,7 @@ export function App() {
 
   const names = useMemo(() => lookupFrom(state.agents, state.map?.locations ?? []), [state.agents, state.map]);
   const time = tickToTime(state.tick);
+  const selectedAgent = state.agents.find((a) => a.id === selected);
   const feed = useMemo(
     () => state.events.filter((e) => !QUIET.has(e.type)).slice(-80).reverse(),
     [state.events],
@@ -47,7 +60,21 @@ export function App() {
 
   return (
     <div className="layout">
-      <div className="map" ref={hostRef} />
+      <div className="main">
+        <div className="view-tabs">
+          <button className={view === "map" ? "on" : ""} onClick={() => setView("map")}>
+            🗺 Térkép
+          </button>
+          <button className={view === "graph" ? "on" : ""} onClick={() => setView("graph")}>
+            🕸 Kapcsolatok
+          </button>
+        </div>
+        <div className="map" ref={hostRef} style={{ visibility: view === "map" ? "visible" : "hidden" }} />
+        {view === "graph" && <RelationGraph agents={state.agents} selected={selected} onSelect={setSelected} />}
+        {selectedAgent && (
+          <ProfileDrawer agent={selectedAgent} profile={state.profile} names={names} hour={time.hour} onClose={() => setSelected(null)} />
+        )}
+      </div>
       {state.summary && <SummaryModal summary={state.summary} onClose={closeSummary} />}
       <aside className="panel">
         <header>
@@ -110,39 +137,6 @@ export function App() {
                 )}
               </div>
               {a.activity?.say && <div className="say small">„{a.activity.say}”</div>}
-              {selected === a.id && (a.mood || a.planGoal) && (
-                <div className="small muted">
-                  {a.mood && <>hangulat: {a.mood}</>}
-                  {a.mood && a.planGoal && " · "}
-                  {a.planGoal && <>cél: {a.planGoal}</>}
-                </div>
-              )}
-              {selected === a.id && (
-                <>
-                  <Bar label="éhség" value={a.needs.hunger} color="#e67e22" />
-                  <Bar label="energia" value={a.needs.energy} color="#3498db" />
-                </>
-              )}
-              {selected === a.id && (
-                <div className="small detail">
-                  <div>Miért: {a.activity?.reason ?? "—"}</div>
-                  <div>Készlet: {Object.entries(a.inventory).map(([k, v]) => `${k} ×${v}`).join(", ") || "üres"}</div>
-                  <div>Ismert pletykák: {a.knownGossip}</div>
-                  {a.relations.length > 0 && (
-                    <div className="rels">
-                      {[...a.relations]
-                        .sort((x, y) => Math.abs(y.liking) + Math.abs(y.trust) - Math.abs(x.liking) - Math.abs(x.trust))
-                        .slice(0, 6)
-                        .map((r) => (
-                          <div key={r.with}>
-                            {names.agent(r.with)}: <span className={r.liking >= 0 ? "pos" : "neg"}>szimpátia {r.liking}</span>,{" "}
-                            <span className={r.trust >= 0 ? "pos" : "neg"}>bizalom {r.trust}</span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </section>
