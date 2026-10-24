@@ -103,6 +103,18 @@ export class EventStore {
       );
       CREATE INDEX IF NOT EXISTS llm_calls_run ON llm_calls(run_id, tick);
       CREATE INDEX IF NOT EXISTS llm_calls_created ON llm_calls(created_at);
+      CREATE TABLE IF NOT EXISTS viewer_state (
+        run_id INTEGER PRIMARY KEY REFERENCES runs(id),
+        last_seen_tick INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS summaries (
+        run_id INTEGER NOT NULL REFERENCES runs(id),
+        from_tick INTEGER NOT NULL,
+        to_tick INTEGER NOT NULL,
+        summary TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, from_tick, to_tick)
+      );
     `);
   }
 
@@ -215,6 +227,30 @@ export class EventStore {
       .prepare("SELECT COALESCE(SUM(cost_usd), 0) AS s FROM llm_calls WHERE date(created_at) = date('now')")
       .get() as { s: number };
     return r.s;
+  }
+
+  getLastSeen(runId: number): number | undefined {
+    const r = this.db.prepare("SELECT last_seen_tick AS t FROM viewer_state WHERE run_id = ?").get(runId) as { t: number } | undefined;
+    return r?.t;
+  }
+
+  setLastSeen(runId: number, tick: number) {
+    this.db
+      .prepare("INSERT INTO viewer_state (run_id, last_seen_tick) VALUES (?, ?) ON CONFLICT(run_id) DO UPDATE SET last_seen_tick = excluded.last_seen_tick")
+      .run(runId, tick);
+  }
+
+  getSummary<T>(runId: number, fromTick: number, toTick: number): T | undefined {
+    const r = this.db
+      .prepare("SELECT summary FROM summaries WHERE run_id = ? AND from_tick = ? AND to_tick = ?")
+      .get(runId, fromTick, toTick) as { summary: string } | undefined;
+    return r && JSON.parse(r.summary);
+  }
+
+  saveSummary(runId: number, fromTick: number, toTick: number, summary: unknown) {
+    this.db
+      .prepare("INSERT OR REPLACE INTO summaries (run_id, from_tick, to_tick, summary) VALUES (?, ?, ?, ?)")
+      .run(runId, fromTick, toTick, JSON.stringify(summary));
   }
 
   /** Folytatáskor a snapshot utáni (újra lefutó) részt töröljük, hogy ne duplikálódjon. */

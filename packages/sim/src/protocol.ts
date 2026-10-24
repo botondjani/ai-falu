@@ -1,7 +1,8 @@
 import type { ActivityKind, DecisionSource, Inventory, Needs, Point, SimEvent, TileMap } from "@falu/core";
 import type { LlmStats } from "./llm/gateway";
+import type { Summary } from "./summary/summary";
 
-export type { LlmStats };
+export type { LlmStats, Summary };
 
 /** A viewernek küldött lakó-nézet (csak ami a megjelenítéshez kell). */
 export interface AgentView {
@@ -46,6 +47,7 @@ export type ServerMessage =
       recentEvents: SimEvent[];
       status: SimStatus;
       market: MarketView;
+      lastSeenTick: number;
     }
   | {
       type: "tick";
@@ -57,6 +59,12 @@ export type ServerMessage =
       llm?: LlmStats;
       market: MarketView;
     }
-  | { type: "status"; status: SimStatus };
+  | { type: "status"; status: SimStatus }
+  | { type: "summary"; summary: Summary };
 
-export type ClientMessage = { type: "pause" } | { type: "resume" } | { type: "speed"; secondsPerDay: number };
+export type ClientMessage =
+  | { type: "pause" }
+  | { type: "resume" }
+  | { type: "speed"; secondsPerDay: number }
+  | { type: "summary"; mode: "since_seen" | "last_day" }
+  | { type: "seen" };

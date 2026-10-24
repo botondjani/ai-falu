@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeEvent, formatTime, lookupFrom, tickToTime, type DecisionSource } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
-import type { LlmStats, MarketView } from "@falu/sim";
+import type { LlmStats, MarketView, Summary } from "@falu/sim";
 
 /** Ezek túl gyakoriak a feedhez. */
 const QUIET = new Set(["earned", "produced", "sold", "arrived"]);
@@ -22,7 +22,7 @@ export function App() {
   const onFrame = useCallback((f: TickFrame) => {
     rendererRef.current?.frame(f.tick, f.tickMs, f.agents, f.moves, f.events);
   }, []);
-  const { state, send } = useSim(onFrame);
+  const { state, send, requestSummary, closeSummary } = useSim(onFrame);
 
   useEffect(() => {
     const r = new VillageRenderer(hostRef.current!);
@@ -48,6 +48,7 @@ export function App() {
   return (
     <div className="layout">
       <div className="map" ref={hostRef} />
+      {state.summary && <SummaryModal summary={state.summary} onClose={closeSummary} />}
       <aside className="panel">
         <header>
           <h1>Falu</h1>
@@ -75,6 +76,9 @@ export function App() {
               </option>
             ))}
           </select>
+          <button onClick={() => requestSummary("last_day")} title="Az elmúlt nap összefoglalója">
+            📜 Mi történt?
+          </button>
           {state.status?.pausedReason && <div className="paused">Szünetel: {state.status.pausedReason}</div>}
         </section>
 
@@ -193,6 +197,44 @@ function CostPanel({ llm }: { llm: LlmStats | null }) {
       </div>
       {llm.budgetExceeded && <div className="paused">⛔ {llm.budgetExceeded}</div>}
     </section>
+  );
+}
+
+function SummaryModal({ summary, onClose }: { summary: Summary | "loading"; onClose: () => void }) {
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <button className="close" onClick={onClose}>
+          ✕
+        </button>
+        <h2 className="modal-title">📜 Amíg nem néztél oda…</h2>
+        {summary === "loading" ? (
+          <p className="muted">A krónikás épp összeszedi a pletykákat…</p>
+        ) : (
+          <>
+            <div className="muted small">
+              {formatTime(tickToTime(summary.fromTick))} – {formatTime(tickToTime(summary.toTick))}
+              {summary.mock && " · mock"}
+            </div>
+            <p className="story">{summary.story}</p>
+            {summary.highlights.length > 0 && (
+              <div className="highlights">
+                {summary.highlights.map((h, i) => (
+                  <div key={i} className="hl">
+                    <div className="hl-n">{i + 1}</div>
+                    <div>
+                      <b>{h.title}</b>
+                      <div className="small muted">{formatTime(tickToTime(h.tick))}</div>
+                      <div className="small">{h.text}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

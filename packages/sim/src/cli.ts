@@ -8,6 +8,8 @@ import { recordedInputs, verifyRun, worldAt } from "./replay";
 import { Runner } from "./runner";
 import { startServer } from "./server";
 import { EventStore } from "./store";
+import { SummaryService } from "./summary/service";
+import { summarize } from "./summary/summary";
 
 interface CliArgs {
   days?: number;
@@ -24,6 +26,7 @@ interface CliArgs {
   listRuns: boolean;
   llmAgents: string;
   villagers: "full" | "demo";
+  summary?: number;
 }
 
 const HELP = `Használat: npm run sim -- [kapcsolók]
@@ -41,6 +44,7 @@ const HELP = `Használat: npm run sim -- [kapcsolók]
   --list-runs       futások listája
   --llm-agents L    LLM-mel gondolkodó lakók: vesszős lista vagy "all" (alap: all)
   --demo            csak a 3 demó lakó (alap: a teljes, 15 fős falu)
+  --summary ID      "Amíg nem néztél oda" összefoglaló egy futásról (--from-day D-től a végéig)
   -v, --verbose     minden esemény kiírása
 `;
 
@@ -77,6 +81,7 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === "--list-runs") args.listRuns = true;
     else if (a === "--llm-agents") args.llmAgents = next();
     else if (a === "--demo") args.villagers = "demo";
+    else if (a === "--summary") args.summary = Number(next());
     else if (a === "--verbose" || a === "-v") args.verbose = true;
     else if (a === "--help" || a === "-h") {
       console.log(HELP);
@@ -118,6 +123,25 @@ async function main() {
     return;
   }
 
+  const cfg = llmConfig();
+  const client = args.mock || !cfg.apiKey ? new MockClient() : new AnthropicClient(cfg.apiKey);
+
+  if (args.summary !== undefined) {
+    const run = store.getRun(args.summary);
+    if (!run) throw new Error(`Nincs ilyen futás: ${args.summary}`);
+    const from = Math.max(0, timeToTick(args.fromDay, 6));
+    const to = run.lastTick + 1;
+    const world = worldAt(store, run.id, to);
+    const gateway = new LlmGateway(client, cfg.models, cfg.budget, store, run.id);
+    const s = await summarize(world, store.events(run.id, from, to), from, to, gateway);
+    console.log(`\n📜 Amíg nem néztél oda (${stamp(from)} – ${stamp(to)})${s.mock ? " [mock]" : ""}\n`);
+    console.log(s.story + "\n");
+    s.highlights.forEach((h, i) => console.log(`  ${i + 1}. ${h.title} (${stamp(h.tick)})\n     ${h.text}`));
+    if (!s.mock) console.log(`\nKöltség: $${gateway.stats.usd.toFixed(4)}`);
+    store.close();
+    return;
+  }
+
   if (args.replay !== undefined) {
     const run = store.getRun(args.replay);
     if (!run) throw new Error(`Nincs ilyen futás: ${args.replay}`);
@@ -131,41 +155,45 @@ async function main() {
       stopAtTick: run.lastTick + 1,
       inputs: new ReplayInputs(recordedInputs(store, run.id)),
     });
-    startServer(runner, args.port);
+    startServer(runner, args.port, new SummaryService(runner));
     runner.start();
     console.log(`Visszajátszás: #${run.id} ${stamp(fromTick)} → ${stamp(run.lastTick)}  ws://localhost:${args.port}`);
     return;
   }
 
-  const cfg = llmConfig();
-  const client = args.mock || !cfg.apiKey ? new MockClient() : new AnthropicClient(cfg.apiKey);
   const llmAgents = args.llmAgents === "all" ? ("all" as const) : new Set(args.llmAgents.split(",").filter(Boolean));
   const withLlm = (runId: number) => {
     const gateway = new LlmGateway(client, cfg.models, cfg.budget, store, runId);
     return {
       inputs: new LiveMind(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId),
       llmStats: () => gateway.stats,
+      gateway,
     };
   };
 
   const villagers = args.villagers === "demo" ? DEMO_VILLAGERS : VILLAGERS;
   let runner: Runner;
+  let gateway: LlmGateway;
   if (args.resume !== undefined) {
     const id = args.resume === "latest" ? store.latestRunId() : args.resume;
     const snap = id !== undefined ? store.loadSnapshot(id) : undefined;
     if (id === undefined || !snap) throw new Error("Nincs folytatható futás");
     // A snapshot utáni naplót eldobjuk; determinisztikusan újra keletkezik.
     store.truncateFrom(id, snap.tick);
-    runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id, ...withLlm(id) });
+    const llm = withLlm(id);
+    gateway = llm.gateway;
+    runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id, ...llm });
     console.log(`Folytatás: #${id} ${stamp(snap.tick)}-tól`);
   } else {
     const runId = store.createRun(args.seed, { mock: client.mock, villagers: villagers.length, llmAgents: args.llmAgents });
+    const llm = withLlm(runId);
+    gateway = llm.gateway;
     runner = new Runner({
       world: createWorld(args.seed, villagers),
       secondsPerDay: args.secondsPerDay,
       store,
       runId,
-      ...withLlm(runId),
+      ...llm,
     });
   }
 
@@ -211,7 +239,7 @@ async function main() {
     return;
   }
 
-  startServer(runner, args.port);
+  startServer(runner, args.port, new SummaryService(runner, gateway, store, runner.runId));
   runner.onTick((r, world) => {
     if (args.verbose) for (const e of r.events) console.log(`[${stamp(e.tick)}] ${describeEvent(e, names(world))}`);
   });

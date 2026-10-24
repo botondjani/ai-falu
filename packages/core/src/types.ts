@@ -123,9 +123,20 @@ export type SimEvent = EventBase &
     | { type: "tool_broke"; agentId: string }
     | { type: "exported"; agentId: string; item: Item; qty: number; price: number }
     | { type: "prices"; prices: Partial<Record<Item, number>> }
+    | { type: "god_event"; text: string }
+    | { type: "whisper"; agentId: string; text: string }
     | { type: "starving"; agentId: string }
     | { type: "planned"; agentId: string; goal: string; items: number }
-    | { type: "conversation"; agentId: string; a: string; b: string; topic: string; lines: ConversationLine[] }
+    | {
+        type: "conversation";
+        agentId: string;
+        a: string;
+        b: string;
+        topic: string;
+        lines: ConversationLine[];
+        deltaA: Relation;
+        deltaB: Relation;
+      }
     | {
         type: "gossip";
         agentId: string;

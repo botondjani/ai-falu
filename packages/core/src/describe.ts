@@ -43,6 +43,10 @@ export function describeEvent(e: SimEvent, n: NameLookup): string {
       return `${n.agent(e.agentId)} eltörte a szerszámát`;
     case "exported":
       return `${n.agent(e.agentId)} a városi vásárba vitt: ${e.qty} ${e.item} (${e.price} tallér)`;
+    case "god_event":
+      return `⚡ ${e.text}`;
+    case "whisper":
+      return `${n.agent(e.agentId)} fejében egy gondolat motoszkál: „${e.text}”`;
     case "prices":
       return `Árak a boltban: ${Object.entries(e.prices).map(([k, v]) => `${k} ${v}`).join(", ")}`;
     case "starving":

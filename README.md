@@ -72,6 +72,13 @@ A lakók rutinját (alvás, evés, munkába járás) a szabály-alapú **autopil
 - **Bér:** a bíró és a nyugdíjas tanítónő órabért kap a falutól, a zenészt a kocsmáros fizeti.
 - Éhes lakó: otthoni étel, ha nincs, akkor vásárlás a boltban, ha az sincs, akkor a kocsma. Az LLM is választhatja a `vásárol` tevékenységet; a promptban benne vannak az aktuális árak.
 
+### „Amíg nem néztél oda”
+
+- A szerver tárolja, mikor nézted utoljára a falut (a viewer bezárása vagy háttérbe kerülése számít). Visszatéréskor, ha legalább egy játékóra eltelt, automatikusan megjelenik az összefoglaló. A **📜 Mi történt?** gomb az elmúlt napot foglalja össze.
+- Menete: a naplóból determinisztikusan **pontozott tények** lesznek (pletyka terjedése, megromlott vagy javult kapcsolat, éhezés, árváltozás, nagy kereset, reflexiók, Isten-mód események), a legfontosabb 25-ből pedig **egy Sonnet-hívás** ír 5–10 mondatos, színes, kicsit humoros elbeszélést, és kiválasztja a 3 legfontosabb eseményt (sorszámmal, hogy ne találjon ki semmit).
+- Mock módban és hiba esetén sablonos elbeszélés készül ugyanazokból a tényekből. Az összefoglalók gyorsítótárazva vannak.
+- Terminálból: `npm run sim -- --summary 1 --from-day 2`
+
 Melyik lakó dönt LLM-mel: `--llm-agents joska` (alap), `--llm-agents bela,mari` vagy `--llm-agents all`.
 
 Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_ROUTINE`, `LLM_MODEL_STRONG`, `LLM_MAX_USD_TOTAL` (5), `LLM_MAX_USD_PER_DAY` (2), `LLM_MAX_CALLS_PER_SIM_DAY` (600), `LLM_ON_BUDGET` (`pause`|`autopilot`).
@@ -92,6 +99,6 @@ Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_R
 - [x] 4. Memória, reflexió, napi terv
 - [x] 5. Beszélgetések, kapcsolatok, pletyka
 - [x] 6. Gazdaság
-- [ ] 7. „Amíg nem néztél oda”
+- [x] 7. „Amíg nem néztél oda”
 - [ ] 8. Isten-mód
 - [ ] 9. Kapcsolati gráf, lakóprofil

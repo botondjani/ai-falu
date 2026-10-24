@@ -139,7 +139,7 @@ export function applyConversation(state: WorldState, c: Conversation, events: Si
   A.lastTalkTick = tick;
   B.lastTalkTick = tick;
 
-  events.push({ tick, type: "conversation", a: A.id, b: B.id, agentId: A.id, topic: c.topic, lines: c.lines });
+  events.push({ tick, type: "conversation", a: A.id, b: B.id, agentId: A.id, topic: c.topic, lines: c.lines, deltaA: dA, deltaB: dB });
   const weight = (d: Relation) => 3 + Math.round((Math.abs(d.trust) + Math.abs(d.liking)) / 6);
   addMemory(state, A.id, "beszélgetés", `Beszélgettem vele: ${B.name} (${c.topic}). ${c.memoryA}`, weight(dA));
   addMemory(state, B.id, "beszélgetés", `Beszélgettem vele: ${A.name} (${c.topic}). ${c.memoryB}`, weight(dB));

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SimEvent, TileMap } from "@falu/core";
-import type { AgentView, ClientMessage, LlmStats, MarketView, ServerMessage, SimStatus } from "@falu/sim";
+import type { AgentView, ClientMessage, LlmStats, MarketView, ServerMessage, SimStatus, Summary } from "@falu/sim";
 
 export interface TickFrame {
   tick: number;
@@ -19,10 +19,14 @@ export interface SimState {
   status: SimStatus | null;
   llm: LlmStats | null;
   market: MarketView | null;
+  /** null: nincs nyitva; "loading": készül; különben a kész összefoglaló. */
+  summary: Summary | "loading" | null;
 }
 
 const WS_URL = import.meta.env.VITE_SIM_WS ?? `ws://${location.hostname}:8787`;
 const MAX_EVENTS = 300;
+/** Legalább ennyi (1 óra) kihagyás után ajánl összefoglalót. */
+const SUMMARY_MIN_TICKS = 12;
 
 /** WebSocket-kapcsolat a szimulációhoz; a tick-képkockákat külön callback kapja (a canvas animációhoz). */
 export function useSim(onFrame: (f: TickFrame) => void) {
@@ -35,9 +39,11 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     status: null,
     llm: null,
     market: null,
+    summary: null,
   });
   const wsRef = useRef<WebSocket | null>(null);
   const frameRef = useRef(onFrame);
+  const tickRef = useRef(0);
   frameRef.current = onFrame;
 
   useEffect(() => {
@@ -63,7 +69,9 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             status: msg.status,
             llm: msg.status.llm ?? null,
             market: msg.market,
+            summary: msg.tick - msg.lastSeenTick >= SUMMARY_MIN_TICKS ? "loading" : null,
           });
+          if (msg.tick - msg.lastSeenTick >= SUMMARY_MIN_TICKS) ws.send(JSON.stringify({ type: "summary", mode: "since_seen" }));
           frameRef.current({ tick: msg.tick, tickMs: 0, agents: msg.agents, moves: {}, events: [] });
         } else if (msg.type === "tick") {
           frameRef.current(msg);
@@ -75,19 +83,43 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             market: msg.market,
             events: msg.events.length ? [...s.events, ...msg.events].slice(-MAX_EVENTS) : s.events,
           }));
+        } else if (msg.type === "summary") {
+          setState((s) => ({ ...s, summary: msg.summary }));
         } else if (msg.type === "status") {
           setState((s) => ({ ...s, status: msg.status, llm: msg.status.llm ?? s.llm }));
         }
       };
     };
     connect();
+    // Ha a fül háttérbe kerül, azt "megnézettnek" vesszük; visszatéréskor jön az összefoglaló.
+    let hiddenAtTick = 0;
+    const onVis = () => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      if (document.hidden) {
+        ws.send(JSON.stringify({ type: "seen" }));
+        hiddenAtTick = tickRef.current;
+      } else if (tickRef.current - hiddenAtTick >= SUMMARY_MIN_TICKS) {
+        setState((s) => ({ ...s, summary: "loading" }));
+        ws.send(JSON.stringify({ type: "summary", mode: "since_seen" }));
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
+      document.removeEventListener("visibilitychange", onVis);
       closed = true;
       clearTimeout(retry);
       wsRef.current?.close();
     };
   }, []);
 
+  tickRef.current = state.tick;
+
   const send = (m: ClientMessage) => wsRef.current?.send(JSON.stringify(m));
-  return { state, send };
+  const requestSummary = (mode: "since_seen" | "last_day") => {
+    setState((s) => ({ ...s, summary: "loading" }));
+    send({ type: "summary", mode });
+  };
+  const closeSummary = () => setState((s) => ({ ...s, summary: null }));
+  return { state, send, requestSummary, closeSummary };
 }
