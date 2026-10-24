@@ -1,4 +1,4 @@
-import { restoreWorld, stepWorld, type DesiredActivity, type SimEvent, type World } from "@falu/core";
+import { restoreWorld, stepWorld, type ExternalInputs, type SimEvent, type World } from "@falu/core";
 import type { EventStore } from "./store";
 
 /** Világ a futás `fromTick` előtti legutóbbi snapshotjából, odaléptetve `fromTick`-ig. */
@@ -6,14 +6,24 @@ export function worldAt(store: EventStore, runId: number, fromTick: number): Wor
   const snap = store.loadSnapshot(runId, fromTick);
   if (!snap) throw new Error(`Nincs snapshot a(z) ${runId}. futáshoz`);
   const world = restoreWorld(snap);
-  const decisions = recordedDecisions(store, runId);
-  while (world.state.tick < fromTick) stepWorld(world, decisions.get(world.state.tick) ?? {});
+  const inputs = recordedInputs(store, runId);
+  while (world.state.tick < fromTick) stepWorld(world, inputs.get(world.state.tick) ?? {});
   return world;
 }
 
-/** A rögzített LLM-döntések tickenként. */
-export function recordedDecisions(store: EventStore, runId: number): Map<number, Record<string, DesiredActivity>> {
-  return store.inputsByTick(runId, "decision") as Map<number, Record<string, DesiredActivity>>;
+const INPUT_FIELDS: Record<string, keyof ExternalInputs> = { decision: "decisions", plan: "plans", reflection: "reflections" };
+
+/** A rögzített külső bemenetek (döntés, terv, reflexió) tickenként. */
+export function recordedInputs(store: EventStore, runId: number): Map<number, ExternalInputs> {
+  const m = new Map<number, ExternalInputs>();
+  for (const i of store.inputs(runId)) {
+    const field = INPUT_FIELDS[i.kind];
+    if (!field) continue;
+    const rec = m.get(i.tick) ?? {};
+    ((rec[field] ??= {}) as Record<string, unknown>)[i.key] = i.payload;
+    m.set(i.tick, rec);
+  }
+  return m;
 }
 
 export interface VerifyResult {
@@ -34,8 +44,8 @@ export function verifyRun(store: EventStore, runId: number): VerifyResult {
   const world = worldAt(store, runId, 0);
   const actual: SimEvent[] = [];
   const endTick = run.lastTick + 1;
-  const decisions = recordedDecisions(store, runId);
-  while (world.state.tick < endTick) actual.push(...stepWorld(world, decisions.get(world.state.tick) ?? {}).events);
+  const inputs = recordedInputs(store, runId);
+  while (world.state.tick < endTick) actual.push(...stepWorld(world, inputs.get(world.state.tick) ?? {}).events);
   const n = Math.max(logged.length, actual.length);
   for (let i = 0; i < n; i++) {
     if (JSON.stringify(logged[i]) !== JSON.stringify(actual[i])) {

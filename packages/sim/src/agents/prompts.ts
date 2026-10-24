@@ -1,4 +1,17 @@
-import { RULES, count, describeEvent, formatTime, lookupFrom, tickToTime, type Agent, type SimEvent, type World } from "@falu/core";
+import {
+  RULES,
+  count,
+  currentPlanItem,
+  describeEvent,
+  formatTime,
+  lookupFrom,
+  retrieve,
+  tickToTime,
+  type Agent,
+  type Memory,
+  type SimEvent,
+  type World,
+} from "@falu/core";
 
 /** Közös, állandó világleírás (minden lakó promptjának eleje, cache-elhető). */
 export function worldRulesText(world: World): string {
@@ -50,13 +63,51 @@ export function situationText(agent: Agent, world: World, recent: SimEvent[]): s
     .map((o) => `${o.name} (${o.activity?.kind})`);
   const inv = Object.entries(agent.inventory).map(([k, v]) => `${k} ×${v}`).join(", ") || "semmi";
   const lines = recent.map((e) => `- ${formatTime(tickToTime(e.tick))}: ${describeEvent(e, n)}`);
-  return `MOST: ${formatTime(t)} (${t.phase}).
+  const query = [here ? n.place(here) : "", ...nearby, agent.activity?.kind ?? ""].join(" ");
+  const memories = retrieve(world.state, agent.id, query, 5);
+  const item = currentPlanItem(agent, t.hour, t.day);
+  const plan = agent.plan?.day === t.day ? `Mai célod: ${agent.plan.goal}${item ? ` Most a terv szerint: ${item.kind} (${n.place(item.locationId)}) – ${item.goal}.` : ""}` : "Nincs mai terved.";
+  return `MOST: ${formatTime(t)} (${t.phase}).${agent.mood ? ` Hangulatod: ${agent.mood}.` : ""}
+${plan}${agent.surprised ? "\nValami váratlan történt, lehet, hogy el kell térned a tervtől." : ""}
 Hol vagy: ${here ? n.place(here) : "úton"}${agent.activity ? `, épp: ${agent.activity.kind}` : ""}.
 Éhség: ${Math.round(agent.needs.hunger)}/100, energia: ${Math.round(agent.needs.energy)}/100.
 Pénz: ${agent.money} tallér. Nálad/otthon: ${inv} (otthoni kenyér: ${count(agent.inventory, "kenyér")}).
 Itt van még: ${nearby.length ? nearby.join(", ") : "senki"}.
 Legutóbbi történések veled:
 ${lines.length ? lines.join("\n") : "- semmi különös"}
+Ami eszedbe jut:
+${memoryLines(memories)}
 
 Mit csinálsz most?`;
+}
+
+export function memoryLines(ms: Memory[]): string {
+  if (ms.length === 0) return "- semmi különös";
+  return ms.map((m) => `- [${m.kind}, ${formatTime(tickToTime(m.tick))}] ${m.text}`).join("\n");
+}
+
+export function planPromptText(agent: Agent, world: World): string {
+  const t = tickToTime(world.state.tick);
+  const ms = retrieve(world.state, agent.id, `${agent.occupation} ${agent.secretDesire}`, 8);
+  return `${t.day}. nap reggele van (${formatTime(t)}).${agent.mood ? ` Tegnap este így érezted magad: ${agent.mood}.` : ""}
+Pénz: ${agent.money} tallér, otthoni kenyér: ${count(agent.inventory, "kenyér")}.
+Legfontosabb emlékeid:
+${memoryLines(ms)}
+
+Készítsd el a mai tervedet: 3–7 időrendi lépés 6 és 22 óra között (egész órák), és egy mondatos napi célt.
+Az evést és az alvást a program magától intézi, azokat nem kell beleírni. A terv tükrözze a jellemedet és a titkos vágyadat.`;
+}
+
+export function reflectionPromptText(agent: Agent, world: World, todays: Memory[]): string {
+  const t = tickToTime(world.state.tick);
+  const important = [...todays].sort((a, b) => b.importance - a.importance || a.tick - b.tick).slice(0, 25);
+  important.sort((a, b) => a.tick - b.tick);
+  const earlier = world.state.memories.filter((m) => m.agentId === agent.id && m.kind === "reflexió" && !todays.includes(m)).slice(-5);
+  return `A ${t.day}. nap estéje van. Ezek történtek veled ma:
+${memoryLines(important)}
+
+Korábbi gondolataid:
+${memoryLines(earlier)}
+
+Gondold végig a napot: fogalmazz meg 1–3 magasabb szintű tanulságot az emberekről, magadról vagy a faluról (pl. "Béla nem megbízható.", "A kocsmában mindig megtudok valamit."), mindegyikhez fontosságot 1–10 között, és add meg a hangulatodat egy-két szóban.`;
 }

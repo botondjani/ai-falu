@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { describeEvent, formatTime, lookupFrom, tickToTime } from "@falu/core";
+import { describeEvent, formatTime, lookupFrom, tickToTime, type DecisionSource } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
 import type { LlmStats } from "@falu/sim";
@@ -101,6 +101,13 @@ export function App() {
                 )}
               </div>
               {a.activity?.say && <div className="say small">„{a.activity.say}”</div>}
+              {(a.mood || a.planGoal) && (
+                <div className="small muted">
+                  {a.mood && <>hangulat: {a.mood}</>}
+                  {a.mood && a.planGoal && " · "}
+                  {a.planGoal && <>cél: {a.planGoal}</>}
+                </div>
+              )}
               <Bar label="éhség" value={a.needs.hunger} color="#e67e22" />
               <Bar label="energia" value={a.needs.energy} color="#3498db" />
               {selected === a.id && (
@@ -127,8 +134,13 @@ export function App() {
   );
 }
 
-const SOURCE_ICON = { llm: "🧠", auto: "⚙", fallback: "⚠" } as const;
-const SOURCE_TITLE = { llm: "LLM döntött", auto: "autopilot (szabály)", fallback: "LLM-hiba, autopilot-tartalék" } as const;
+const SOURCE_ICON: Record<DecisionSource, string> = { llm: "🧠", auto: "⚙", fallback: "⚠", terv: "📋" };
+const SOURCE_TITLE: Record<DecisionSource, string> = {
+  llm: "LLM döntött",
+  auto: "autopilot (szabály)",
+  fallback: "LLM-hiba, autopilot-tartalék",
+  terv: "a napi terv szerint",
+};
 
 function CostPanel({ llm }: { llm: LlmStats | null }) {
   if (!llm) return null;

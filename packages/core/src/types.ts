@@ -1,5 +1,6 @@
 import type { Inventory, Item } from "./inventory";
 import type { Point } from "./map/types";
+import type { DayPlan, Memory } from "./memory";
 
 export interface Needs {
   /** 0 = jóllakott, 100 = éhezik */
@@ -11,7 +12,7 @@ export interface Needs {
 export type ActivityKind = "alszik" | "dolgozik" | "eszik" | "pihen" | "szórakozik" | "sétál";
 
 /** Ki döntött: szabály-alapú autopilot, LLM, vagy LLM-hiba utáni tartalék. */
-export type DecisionSource = "auto" | "llm" | "fallback";
+export type DecisionSource = "auto" | "llm" | "fallback" | "terv";
 
 export interface Activity {
   kind: ActivityKind;
@@ -55,6 +56,11 @@ export interface Agent extends VillagerSeed {
   inventory: Inventory;
   /** Munkával töltött tickek a legutóbbi termelés óta. */
   workProgress: number;
+  /** Az esti reflexióból (pl. "elégedett", "gyanakvó"). */
+  mood?: string;
+  plan?: DayPlan;
+  /** Történt-e valami váratlan (fontos emlék) az utolsó LLM-döntés óta. */
+  surprised: boolean;
 }
 
 export interface WorldState {
@@ -64,6 +70,20 @@ export interface WorldState {
   agents: Agent[];
   /** Helyszínek készlete (pl. pékség kenyérkészlete). */
   stocks: Record<string, Inventory>;
+  memories: Memory[];
+  nextMemoryId: number;
+}
+
+export interface Reflection {
+  insights: { text: string; importance: number }[];
+  mood: string;
+}
+
+/** Külső bemenetek egy tickre (LLM vagy Isten-mód); ezeket rögzítjük a visszajátszáshoz. */
+export interface ExternalInputs {
+  decisions?: Record<string, DesiredActivity>;
+  plans?: Record<string, DayPlan>;
+  reflections?: Record<string, Reflection>;
 }
 
 interface EventBase {
@@ -89,6 +109,8 @@ export type SimEvent = EventBase &
     | { type: "earned"; agentId: string; amount: number; reason: string }
     | { type: "took"; agentId: string; item: Item; qty: number; from: string }
     | { type: "starving"; agentId: string }
+    | { type: "planned"; agentId: string; goal: string; items: number }
+    | { type: "reflected"; agentId: string; insights: string[]; mood: string }
   );
 
 export type SimEventType = SimEvent["type"];

@@ -1,6 +1,7 @@
 import { count } from "./inventory";
 import { RULES } from "./rules";
-import { hourBetween, tickToTime } from "./time";
+import { currentPlanItem } from "./memory";
+import { hourBetween, tickToTime, timeToTick } from "./time";
 import type { Agent, DesiredActivity, WorldState } from "./types";
 import type { Rng } from "./rng";
 
@@ -70,4 +71,20 @@ export function needsDecision(agent: Agent, state: WorldState): boolean {
   if (cur.kind === "eszik") return false;
   if (cur.kind === "alszik" && cur.source === "auto" && agent.needs.energy < 60) return false;
   return cur.commitUntil === undefined || state.tick >= cur.commitUntil;
+}
+
+/** Ha a napi terv lefedi a mostani órát, a terv szerinti tevékenység (LLM nélkül). */
+export function planDesired(agent: Agent, state: WorldState): DesiredActivity | undefined {
+  const t = tickToTime(state.tick);
+  const item = currentPlanItem(agent, t.hour, t.day);
+  if (!item) return undefined;
+  const until = timeToTick(t.day, item.toHour);
+  if (until <= state.tick) return undefined;
+  return {
+    kind: item.kind,
+    locationId: item.locationId,
+    reason: `terv szerint: ${item.goal}`,
+    source: "terv",
+    durationTicks: until - state.tick,
+  };
 }

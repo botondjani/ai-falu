@@ -14,6 +14,8 @@ export interface AgentView {
   needs: Needs;
   money: number;
   inventory: Inventory;
+  mood?: string;
+  planGoal?: string;
 }
 
 export interface SimStatus {

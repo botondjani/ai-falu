@@ -1,10 +1,10 @@
 import { DEMO_VILLAGERS, TICKS_PER_DAY, createWorld, describeEvent, lookupFrom, stamp, timeToTick, type World } from "@falu/core";
-import { LiveDecisions, ReplayDecisions } from "./agents/decision";
+import { LiveMind, ReplayInputs } from "./agents/mind";
 import { llmConfig, loadDotEnv } from "./config";
 import { AnthropicClient } from "./llm/anthropic";
 import { LlmGateway } from "./llm/gateway";
 import { MockClient } from "./llm/mock";
-import { recordedDecisions, verifyRun, worldAt } from "./replay";
+import { recordedInputs, verifyRun, worldAt } from "./replay";
 import { Runner } from "./runner";
 import { startServer } from "./server";
 import { EventStore } from "./store";
@@ -125,7 +125,7 @@ async function main() {
       runId: run.id,
       mode: "visszajátszás",
       stopAtTick: run.lastTick + 1,
-      decisions: new ReplayDecisions(recordedDecisions(store, run.id)),
+      inputs: new ReplayInputs(recordedInputs(store, run.id)),
     });
     startServer(runner, args.port);
     runner.start();
@@ -139,7 +139,7 @@ async function main() {
   const withLlm = (runId: number) => {
     const gateway = new LlmGateway(client, cfg.models, cfg.budget, store, runId);
     return {
-      decisions: new LiveDecisions(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId),
+      inputs: new LiveMind(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId),
       llmStats: () => gateway.stats,
     };
   };

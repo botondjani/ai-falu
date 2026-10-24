@@ -217,18 +217,6 @@ export class EventStore {
     return r.s;
   }
 
-  /** Külső bemenetek tickenként csoportosítva (visszajátszáshoz). */
-  inputsByTick(runId: number, kind: string): Map<number, Record<string, unknown>> {
-    const m = new Map<number, Record<string, unknown>>();
-    for (const i of this.inputs(runId)) {
-      if (i.kind !== kind) continue;
-      const rec = m.get(i.tick) ?? {};
-      rec[i.key] = i.payload;
-      m.set(i.tick, rec);
-    }
-    return m;
-  }
-
   /** Folytatáskor a snapshot utáni (újra lefutó) részt töröljük, hogy ne duplikálódjon. */
   truncateFrom(runId: number, tick: number) {
     this.db.transaction(() => {

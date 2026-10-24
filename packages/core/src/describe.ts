@@ -37,6 +37,10 @@ export function describeEvent(e: SimEvent, n: NameLookup): string {
       return `${n.agent(e.agentId)} hazavitt: ${e.qty} ${e.item}`;
     case "starving":
       return `${n.agent(e.agentId)} nagyon éhes!`;
+    case "planned":
+      return `${n.agent(e.agentId)} mai célja: ${e.goal}`;
+    case "reflected":
+      return `${n.agent(e.agentId)} elgondolkodott (${e.mood}): ${e.insights.join(" ")}`;
   }
 }
 

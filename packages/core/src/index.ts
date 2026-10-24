@@ -10,3 +10,4 @@ export * from "./autopilot";
 export * from "./world";
 export * from "./seed/demo";
 export * from "./describe";
+export * from "./memory";

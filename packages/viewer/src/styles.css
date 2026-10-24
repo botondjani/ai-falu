@@ -42,3 +42,5 @@ button, select { background: #2a3240; color: var(--text); border: 1px solid var(
 .say { color: #f5e6a8; font-style: italic; margin-top: 2px; }
 .cost-main { font-size: 16px; margin-bottom: 2px; }
 .badge { background: #8e44ad; color: #fff; border-radius: 3px; padding: 0 5px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.ev-planned { color: #7fd3a8; }
+.ev-reflected { color: #8fc1ff; font-style: italic; }

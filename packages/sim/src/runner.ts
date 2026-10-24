@@ -1,5 +1,5 @@
-import { TICKS_PER_DAY, stepWorld, type DesiredActivity, type SimEvent, type StepResult, type World } from "@falu/core";
-import type { DecisionProvider } from "./agents/decision";
+import { TICKS_PER_DAY, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
+import type { InputProvider } from "./agents/mind";
 import { BudgetExceededError, type LlmStats } from "./llm/gateway";
 import type { AgentView, SimStatus } from "./protocol";
 import type { EventStore } from "./store";
@@ -14,8 +14,8 @@ export interface RunnerOptions {
   mode?: SimStatus["mode"];
   /** Ennél a ticknél megáll (pl. visszajátszás vége). */
   stopAtTick?: number;
-  /** Külső (LLM vagy rögzített) döntések forrása. */
-  decisions?: DecisionProvider;
+  /** Külső (LLM vagy rögzített) bemenetek forrása. */
+  inputs?: InputProvider;
   llmStats?: () => LlmStats | undefined;
 }
 
@@ -28,7 +28,7 @@ export class Runner {
   readonly runId?: number;
   readonly mode: SimStatus["mode"];
   stopAtTick?: number;
-  readonly decisions?: DecisionProvider;
+  readonly inputs?: InputProvider;
   readonly llmStats: () => LlmStats | undefined;
   secondsPerDay: number;
   pausedReason?: string;
@@ -44,7 +44,7 @@ export class Runner {
     this.runId = opts.runId;
     this.mode = opts.mode ?? "élő";
     this.stopAtTick = opts.stopAtTick;
-    this.decisions = opts.decisions;
+    this.inputs = opts.inputs;
     this.llmStats = opts.llmStats ?? (() => undefined);
     if (this.store && this.runId !== undefined && this.world.state.tick % TICKS_PER_DAY === 0) {
       this.store.saveSnapshot(this.runId, this.world.state);
@@ -68,10 +68,10 @@ export class Runner {
    * Keret elérésekor nem lép, hanem null-t ad és szünetel.
    */
   async advance(): Promise<StepResult | null> {
-    let external: Record<string, DesiredActivity> = {};
-    if (this.decisions) {
+    let external: ExternalInputs = {};
+    if (this.inputs) {
       try {
-        external = await this.decisions.decide(this.world);
+        external = await this.inputs.collect(this.world);
       } catch (e) {
         if (e instanceof BudgetExceededError) {
           this.pause(`költségkeret: ${e.message}`);
@@ -81,11 +81,11 @@ export class Runner {
       }
     }
     const r = this.step(external);
-    this.decisions?.observe?.(r.events);
+    this.inputs?.observe?.(r.events);
     return r;
   }
 
-  step(external: Record<string, DesiredActivity> = {}): StepResult {
+  step(external: ExternalInputs = {}): StepResult {
     const r = stepWorld(this.world, external);
     if (this.store && this.runId !== undefined) {
       this.store.appendEvents(this.runId, r.events);
@@ -192,6 +192,8 @@ export class Runner {
       needs: { hunger: Math.round(a.needs.hunger), energy: Math.round(a.needs.energy) },
       money: a.money,
       inventory: a.inventory,
+      mood: a.mood,
+      planGoal: a.plan?.goal,
     }));
   }
 }

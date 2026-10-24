@@ -1,30 +1,18 @@
 import { z } from "zod";
 import {
-  Rng,
-  TICKS_PER_HOUR,
-  autopilotDecide,
-  count,
-  needsDecision,
-  tickToTime,
-  RULES,
   MINUTES_PER_TICK,
+  RULES,
+  Rng,
+  count,
+  tickToTime,
   type ActivityKind,
   type Agent,
   type DesiredActivity,
-  type SimEvent,
   type World,
 } from "@falu/core";
-import { BudgetExceededError, type LlmGateway } from "../llm/gateway";
-import type { EventStore } from "../store";
-import { personaText, situationText, worldRulesText } from "./prompts";
 
-/** Tickenként a külső döntések (lakó → kívánt tevékenység). */
-export interface DecisionProvider {
-  decide(world: World): Promise<Record<string, DesiredActivity>>;
-  observe?(events: SimEvent[]): void;
-}
-
-const KINDS = ["dolgozik", "pihen", "szórakozik", "sétál", "eszik", "alszik"] as const satisfies readonly ActivityKind[];
+export const ACTIVITY_KINDS = ["dolgozik", "pihen", "szórakozik", "sétál", "eszik", "alszik"] as const satisfies readonly ActivityKind[];
+const KINDS = ACTIVITY_KINDS;
 
 export function decisionSchema(locationIds: string[]) {
   return z.object({
@@ -37,17 +25,23 @@ export function decisionSchema(locationIds: string[]) {
 }
 export type Decision = z.infer<ReturnType<typeof decisionSchema>>;
 
+/** Tevékenység + helyszín szabályai. Terveknél az aktuális készletet nem nézzük. */
+export function checkActivity(kind: ActivityKind, loc: string, agent: Agent, opts: { planning?: boolean } = {}): string | undefined {
+  if (kind === "dolgozik" && loc !== agent.workplaceId) return `dolgozni csak a munkahelyen (${agent.workplaceId}) lehet`;
+  if (kind === "alszik" && loc !== agent.homeId) return `aludni csak otthon (${agent.homeId}) lehet`;
+  if (kind === "eszik") {
+    if (loc !== agent.homeId && loc !== "kocsma") return "enni otthon vagy a kocsmában lehet";
+    if (opts.planning) return undefined;
+    if (loc === agent.homeId && count(agent.inventory, "kenyér") === 0) return "otthon nincs kenyér";
+    if (loc === "kocsma" && agent.money < RULES.mealPrice) return "nincs pénz a kocsmai ételre";
+  }
+  return undefined;
+}
+
 /** Szemantikai ellenőrzés (amit a JSON-séma nem tud kifejezni). Hibaszöveg vagy undefined. */
 export function validateDecision(d: Decision, agent: Agent): string | undefined {
-  if (d.cselekves === "dolgozik" && d.helyszin !== agent.workplaceId) return `dolgozni csak a munkahelyen (${agent.workplaceId}) lehet`;
-  if (d.cselekves === "alszik" && d.helyszin !== agent.homeId) return `aludni csak otthon (${agent.homeId}) lehet`;
-  if (d.cselekves === "eszik") {
-    if (d.helyszin === agent.homeId && count(agent.inventory, "kenyér") === 0) return "otthon nincs kenyér";
-    if (d.helyszin === "kocsma" && agent.money < RULES.mealPrice) return "nincs pénz a kocsmai ételre";
-    if (d.helyszin !== agent.homeId && d.helyszin !== "kocsma") return "enni otthon vagy a kocsmában lehet";
-  }
   if (!Number.isFinite(d.idotartam_perc)) return "az időtartam nem szám";
-  return undefined;
+  return checkActivity(d.cselekves, d.helyszin, agent);
 }
 
 export function toDesired(d: Decision): DesiredActivity {
@@ -60,105 +54,6 @@ export function toDesired(d: Decision): DesiredActivity {
     durationTicks: Math.round(minutes / MINUTES_PER_TICK),
     source: "llm",
   };
-}
-
-export interface LiveDecisionOptions {
-  /** Mely lakók döntenek LLM-mel ("all" = mind). */
-  llmAgents: Set<string> | "all";
-  /** Keret elérésekor: szünet (alap) vagy autopilot. */
-  onBudget: "pause" | "autopilot";
-}
-
-/** Élő döntések: a döntési ponton álló LLM-lakóknak párhuzamosan kér döntést, és rögzíti a bemenetet. */
-export class LiveDecisions implements DecisionProvider {
-  private recent = new Map<string, SimEvent[]>();
-  budgetPaused?: string;
-
-  constructor(
-    private gateway: LlmGateway,
-    private opts: LiveDecisionOptions,
-    private store?: EventStore,
-    private runId?: number,
-  ) {}
-
-  observe(events: SimEvent[]) {
-    for (const e of events) {
-      if (!("agentId" in e) || e.type === "earned" || e.type === "produced" || e.type === "arrived") continue;
-      const list = this.recent.get(e.agentId) ?? [];
-      list.push(e);
-      if (list.length > 6) list.shift();
-      this.recent.set(e.agentId, list);
-    }
-  }
-
-  private enabled(a: Agent) {
-    return this.opts.llmAgents === "all" || this.opts.llmAgents.has(a.id);
-  }
-
-  async decide(world: World): Promise<Record<string, DesiredActivity>> {
-    const due = world.state.agents.filter((a) => this.enabled(a) && needsDecision(a, world.state));
-    if (due.length === 0) return {};
-    const out: Record<string, DesiredActivity> = {};
-    let budgetHit: string | undefined;
-    const results = await Promise.all(
-      due.map(async (a) => {
-        try {
-          return [a, await this.decideOne(a, world)] as const;
-        } catch (e) {
-          if (!(e instanceof BudgetExceededError)) throw e;
-          budgetHit = e.message;
-          return [a, null] as const;
-        }
-      }),
-    );
-    if (budgetHit && this.opts.onBudget === "pause") {
-      this.budgetPaused = budgetHit;
-      throw new BudgetExceededError(budgetHit);
-    }
-    for (const [a, d] of results) {
-      const desired = d ?? fallback(a, world);
-      out[a.id] = desired;
-      this.store?.recordInput(this.runId!, world.state.tick, "decision", a.id, desired);
-    }
-    return out;
-  }
-
-  private async decideOne(agent: Agent, world: World): Promise<DesiredActivity> {
-    const schema = decisionSchema(world.map.locations.map((l) => l.id));
-    const res = await this.gateway.call(
-      {
-        purpose: "decision",
-        tick: world.state.tick,
-        agentId: agent.id,
-        tier: "routine",
-        system: [{ text: worldRulesText(world) }, { text: personaText(agent, world), cache: true }],
-        user: situationText(agent, world, this.recent.get(agent.id) ?? []),
-        schema,
-        maxTokens: 2000,
-        effort: "low",
-        mock: () => mockDecision(agent, world),
-      },
-      (d) => validateDecision(d, agent),
-    );
-    if (res.data) return toDesired(res.data);
-    this.gateway.noteFallback();
-    return fallback(agent, world);
-  }
-}
-
-/** Hiba esetén: autopilot döntés, 1 órás kötelezettséggel (hogy ne kérdezzünk újra minden tickben). */
-function fallback(agent: Agent, world: World): DesiredActivity {
-  const rng = Rng.fromSeed(`${agent.id}:${world.state.tick}`);
-  const d = autopilotDecide({ ...agent, activity: null }, world.state, rng);
-  return { ...d, source: "fallback", durationTicks: TICKS_PER_HOUR };
-}
-
-/** Visszajátszás: a rögzített döntések tickenként. */
-export class ReplayDecisions implements DecisionProvider {
-  constructor(private byTick: Map<number, Record<string, unknown>>) {}
-  async decide(world: World) {
-    return (this.byTick.get(world.state.tick) ?? {}) as Record<string, DesiredActivity>;
-  }
 }
 
 const LINES: Record<(typeof KINDS)[number], string[]> = {

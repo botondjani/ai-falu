@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_VILLAGERS, TICKS_PER_DAY, createWorld, type World } from "@falu/core";
-import { LiveDecisions, decisionSchema, mockDecision, validateDecision, type Decision } from "../src/agents/decision";
+import { decisionSchema, mockDecision, validateDecision, type Decision } from "../src/agents/decision";
+import { LiveMind } from "../src/agents/mind";
 import { LlmGateway } from "../src/llm/gateway";
 import { MockClient } from "../src/llm/mock";
 import { costUsd } from "../src/llm/pricing";
@@ -22,6 +23,13 @@ class ScriptedClient implements LlmClient {
     const json = this.answers[Math.min(this.calls++, this.answers.length - 1)];
     return { json, usage, model };
   }
+}
+
+/** Világ a reggeli tervezés utáni tickről (hogy csak döntés-hívás legyen). */
+function afterPlanning(): World {
+  const w = createWorld("t", DEMO_VILLAGERS);
+  w.state.tick = 1;
+  return w;
 }
 
 function joska(world: World) {
@@ -66,9 +74,9 @@ describe("LLM gateway", () => {
   it("érvénytelen válasz után újrapróbál", async () => {
     const client = new ScriptedClient([{ ...good, cselekves: "repül" }, good]);
     const gw = new LlmGateway(client, MODELS, BUDGET);
-    const world = createWorld("t", DEMO_VILLAGERS);
-    const dec = new LiveDecisions(gw, { llmAgents: new Set(["joska"]), onBudget: "pause" });
-    const out = await dec.decide(world);
+    const world = afterPlanning();
+    const dec = new LiveMind(gw, { llmAgents: new Set(["joska"]), onBudget: "pause" });
+    const out = (await dec.collect(world)).decisions!;
     expect(client.calls).toBe(2);
     expect(out.joska).toMatchObject({ kind: "dolgozik", locationId: "mezo", source: "llm", durationTicks: 24, say: "Hajrá!" });
     expect(gw.stats.calls).toBe(2);
@@ -78,8 +86,8 @@ describe("LLM gateway", () => {
   it("két hiba után biztonságos autopilot-tartalék", async () => {
     const client = new ScriptedClient([{ nonsense: true }]);
     const gw = new LlmGateway(client, MODELS, BUDGET);
-    const dec = new LiveDecisions(gw, { llmAgents: new Set(["joska"]), onBudget: "pause" });
-    const out = await dec.decide(createWorld("t", DEMO_VILLAGERS));
+    const dec = new LiveMind(gw, { llmAgents: new Set(["joska"]), onBudget: "pause" });
+    const out = (await dec.collect(afterPlanning())).decisions!;
     expect(out.joska.source).toBe("fallback");
     expect(out.joska.durationTicks).toBeGreaterThan(0);
     expect(gw.stats.failures).toBe(1);
@@ -91,9 +99,9 @@ describe("LLM gateway", () => {
     const client = new ScriptedClient([stroll]);
     const gw = new LlmGateway(client, MODELS, { ...BUDGET, maxCallsPerSimDay: 3 });
     const runner = new Runner({
-      world: createWorld("t", DEMO_VILLAGERS),
+      world: afterPlanning(),
       secondsPerDay: 600,
-      decisions: new LiveDecisions(gw, { llmAgents: "all", onBudget: "pause" }),
+      inputs: new LiveMind(gw, { llmAgents: "all", onBudget: "pause" }),
     });
     await runner.runTicks(TICKS_PER_DAY);
     expect(runner.pausedReason).toMatch(/költségkeret/);
@@ -104,12 +112,12 @@ describe("LLM gateway", () => {
   it("keretnél autopilot módban tovább fut", async () => {
     const gw = new LlmGateway(new ScriptedClient([good]), MODELS, { ...BUDGET, maxCallsPerSimDay: 3 });
     const runner = new Runner({
-      world: createWorld("t", DEMO_VILLAGERS),
+      world: afterPlanning(),
       secondsPerDay: 600,
-      decisions: new LiveDecisions(gw, { llmAgents: "all", onBudget: "autopilot" }),
+      inputs: new LiveMind(gw, { llmAgents: "all", onBudget: "autopilot" }),
     });
     await runner.runTicks(TICKS_PER_DAY);
-    expect(runner.world.state.tick).toBe(TICKS_PER_DAY);
+    expect(runner.world.state.tick).toBe(TICKS_PER_DAY + 1);
   });
 
   it("LLM-döntésekkel is pontosan visszajátszható", async () => {
@@ -121,7 +129,7 @@ describe("LLM gateway", () => {
       secondsPerDay: 600,
       store,
       runId,
-      decisions: new LiveDecisions(gw, { llmAgents: "all", onBudget: "pause" }, store, runId),
+      inputs: new LiveMind(gw, { llmAgents: "all", onBudget: "pause" }, store, runId),
     });
     await runner.runTicks(2 * TICKS_PER_DAY);
     expect(gw.stats.calls).toBeGreaterThan(10);

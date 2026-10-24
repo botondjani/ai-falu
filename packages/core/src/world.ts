@@ -1,4 +1,5 @@
-import { autopilotDecide } from "./autopilot";
+import { autopilotDecide, needsDecision, planDesired } from "./autopilot";
+import { addMemory, observeEvents, pruneMemories } from "./memory";
 import { add, count, remove, transfer } from "./inventory";
 import { buildVillageMap } from "./map/village";
 import { getLocation, type Point, type TileMap } from "./map/types";
@@ -6,7 +7,7 @@ import { findPath } from "./pathfinding";
 import { Rng, hash2 } from "./rng";
 import { RULES } from "./rules";
 import { TICKS_PER_DAY, tickToTime } from "./time";
-import type { Agent, DesiredActivity, SimEvent, VillagerSeed, WorldState } from "./types";
+import type { Agent, DesiredActivity, ExternalInputs, SimEvent, VillagerSeed, WorldState } from "./types";
 
 export interface World {
   map: TileMap;
@@ -37,12 +38,21 @@ export function createWorld(seed: string, villagers: VillagerSeed[]): World {
         money: v.money ?? 30,
         inventory: { ...(v.inventory ?? { kenyér: 2 }) },
         workProgress: 0,
+        surprised: false,
       };
     })
     .sort((a, b) => a.id.localeCompare(b.id));
   const stocks: WorldState["stocks"] = {};
   for (const loc of map.locations) stocks[loc.id] = {};
-  return { map, state: { seed, tick: 0, rngState: Rng.fromSeed(seed).state, agents, stocks } };
+  const state: WorldState = { seed, tick: 0, rngState: Rng.fromSeed(seed).state, agents, stocks, memories: [], nextMemoryId: 1 };
+  // Kezdő emlékek a kapcsolatokból.
+  for (const a of agents) {
+    for (const r of a.relationships ?? []) {
+      const other = agents.find((o) => o.id === r.with);
+      if (other) addMemory(state, a.id, "reflexió", `${other.name}: ${r.kind}.`, 6, 0);
+    }
+  }
+  return { map, state };
 }
 
 /** Világ visszaállítása snapshotból (a térkép kódból épül újra). */
@@ -51,23 +61,25 @@ export function restoreWorld(state: WorldState): World {
 }
 
 /** Egy tick előreléptetése. Determinisztikus: ugyanabból az állapotból ugyanaz jön ki. */
-export function stepWorld(
-  world: World,
-  external: Record<string, DesiredActivity> = {},
-  decide: Decider = autopilotDecide,
-): StepResult {
+export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Decider = autopilotDecide): StepResult {
   const { state, map } = world;
   const rng = new Rng(state.rngState);
   const events: SimEvent[] = [];
   const moves: Record<string, Point[]> = {};
   const tick = state.tick;
+  const external = inputs.decisions ?? {};
 
-  if (tick % TICKS_PER_DAY === 0) events.push({ tick, type: "day_started", day: tickToTime(tick).day });
+  if (tick % TICKS_PER_DAY === 0) {
+    events.push({ tick, type: "day_started", day: tickToTime(tick).day });
+    if (tick > 0) pruneMemories(state);
+  }
+  applyMindInputs(state, inputs, events);
 
   for (const agent of state.agents) {
     updateNeeds(agent);
 
-    const ext = external[agent.id];
+    const ext = external[agent.id] ?? (needsDecision(agent, state) && !agent.surprised ? planDesired(agent, state) : undefined);
+    if (external[agent.id]) agent.surprised = false;
     const desired = ext ? { source: "llm" as const, ...ext } : decide(agent, state, rng);
     const cur = agent.activity;
     if (ext || !cur || cur.kind !== desired.kind || cur.locationId !== desired.locationId) {
@@ -88,9 +100,30 @@ export function stepWorld(
     }
   }
 
+  observeEvents(state, map, events);
   state.rngState = rng.state;
   state.tick++;
   return { events, moves };
+}
+
+/** Napi terv és esti reflexió beépítése (külső, rögzített bemenetből). */
+function applyMindInputs(state: WorldState, inputs: ExternalInputs, events: SimEvent[]) {
+  const tick = state.tick;
+  for (const agent of state.agents) {
+    const plan = inputs.plans?.[agent.id];
+    if (plan) {
+      agent.plan = plan;
+      const steps = plan.items.map((i) => `${i.fromHour}-${i.toHour}h ${i.kind} (${i.locationId})`).join(", ");
+      addMemory(state, agent.id, "terv", `Mai tervem: ${plan.goal}. ${steps}`, 4);
+      events.push({ tick, type: "planned", agentId: agent.id, goal: plan.goal, items: plan.items.length });
+    }
+    const refl = inputs.reflections?.[agent.id];
+    if (refl) {
+      for (const i of refl.insights) addMemory(state, agent.id, "reflexió", i.text, i.importance);
+      agent.mood = refl.mood;
+      events.push({ tick, type: "reflected", agentId: agent.id, insights: refl.insights.map((i) => i.text), mood: refl.mood });
+    }
+  }
 }
 
 function updateNeeds(agent: Agent) {
