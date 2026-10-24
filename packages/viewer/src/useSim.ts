@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SimEvent, TileMap } from "@falu/core";
-import type { AgentView, ClientMessage, LlmStats, ServerMessage, SimStatus } from "@falu/sim";
+import type { AgentView, ClientMessage, LlmStats, MarketView, ServerMessage, SimStatus } from "@falu/sim";
 
 export interface TickFrame {
   tick: number;
@@ -18,6 +18,7 @@ export interface SimState {
   events: SimEvent[];
   status: SimStatus | null;
   llm: LlmStats | null;
+  market: MarketView | null;
 }
 
 const WS_URL = import.meta.env.VITE_SIM_WS ?? `ws://${location.hostname}:8787`;
@@ -33,6 +34,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     events: [],
     status: null,
     llm: null,
+    market: null,
   });
   const wsRef = useRef<WebSocket | null>(null);
   const frameRef = useRef(onFrame);
@@ -60,6 +62,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             events: msg.recentEvents.slice(-MAX_EVENTS),
             status: msg.status,
             llm: msg.status.llm ?? null,
+            market: msg.market,
           });
           frameRef.current({ tick: msg.tick, tickMs: 0, agents: msg.agents, moves: {}, events: [] });
         } else if (msg.type === "tick") {
@@ -69,6 +72,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             tick: msg.tick,
             agents: msg.agents,
             llm: msg.llm ?? s.llm,
+            market: msg.market,
             events: msg.events.length ? [...s.events, ...msg.events].slice(-MAX_EVENTS) : s.events,
           }));
         } else if (msg.type === "status") {

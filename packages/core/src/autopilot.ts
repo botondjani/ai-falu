@@ -1,4 +1,5 @@
 import { count } from "./inventory";
+import { SHOP, TAVERN, FOOD, foodAtHome, mealPrice, ownerOf, priceOf } from "./economy";
 import { RULES } from "./rules";
 import { currentPlanItem } from "./memory";
 import { hourBetween, tickToTime, timeToTick } from "./time";
@@ -27,11 +28,17 @@ export function autopilotDecide(agent: Agent, state: WorldState, rng: Rng): Desi
   if (night) return { kind: "alszik", locationId: agent.homeId, reason: "késő van" };
 
   if (agent.needs.hunger >= RULES.hungryThreshold) {
-    if (count(agent.inventory, "kenyér") > 0) {
-      return { kind: "eszik", locationId: agent.homeId, reason: "éhes, van otthon kenyér" };
+    const food = foodAtHome(agent);
+    if (food) return { kind: "eszik", locationId: agent.homeId, reason: `éhes, van otthon ${food}` };
+    if (cur?.kind === "vásárol" && !cur.arrived) return keep(cur);
+    const shop = state.stocks[SHOP];
+    if (count(shop, "kenyér") > 0 && agent.money >= priceOf(shop, "kenyér")) {
+      return { kind: "vásárol", locationId: SHOP, reason: "éhes, kenyeret vesz a boltban" };
     }
-    if (agent.money >= RULES.mealPrice) {
-      return { kind: "eszik", locationId: "kocsma", reason: "éhes, a kocsmában eszik" };
+    const tavern = state.stocks[TAVERN];
+    const tavernOwner = ownerOf(state, TAVERN) === agent;
+    if (FOOD.some((f) => count(tavern, f) > 0) && (tavernOwner || agent.money >= mealPrice(state))) {
+      return { kind: "eszik", locationId: TAVERN, reason: "éhes, a kocsmában eszik" };
     }
     // nincs étel és pénz: dolgozik tovább, hátha keres valamit
   }
@@ -68,7 +75,7 @@ export function needsDecision(agent: Agent, state: WorldState): boolean {
   if (agent.needs.hunger >= RULES.hungryThreshold || agent.needs.energy < RULES.exhaustedThreshold) return false;
   const cur = agent.activity;
   if (!cur) return true;
-  if (cur.kind === "eszik") return false;
+  if (cur.kind === "eszik" || (cur.kind === "vásárol" && !cur.arrived)) return false;
   if (cur.kind === "alszik" && cur.source === "auto" && agent.needs.energy < 60) return false;
   return cur.commitUntil === undefined || state.tick >= cur.commitUntil;
 }

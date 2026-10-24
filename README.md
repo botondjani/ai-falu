@@ -63,6 +63,15 @@ A lakók rutinját (alvás, evés, munkába járás) a szabály-alapú **autopil
 - **Kapcsolatok:** irányított vélemények (A → B) -100..100 között, kezdetben a seed-kapcsolatokból.
 - **Pletyka:** azonosítóval terjed. Aki hallja, emléket kap (fontosság 5, ezért a következő döntését az LLM hozza), és romlik vagy javul a véleménye az alanyról. Csak az a pletyka adható tovább, amit a mondó tényleg ismer.
 
+### Gazdaság
+
+- **Termelési láncok** (óránként): mező → gabona; pék: 1 gabona → 2 kenyér; erdő → fa; kovács: 1 fa → 1 szerszám; folyó → hal; füvesasszony → gyógyfű. Szerszámmal a földműves, a favágó és a halász többet termel, de a szerszám néha eltörik. Ebből jön a szerszám iránti kereslet.
+- **Bolt = piac:** a termelők eladják a fölösleget a boltnak, a lakók ott vesznek kenyeret, a pék és a kovács ott veszi az alapanyagot. Az ár a készlettől függ: alapár × √(célkészlet / készlet), 0.5× és 2.5× között. A bolt az ár 70%-áért vásárol fel, a különbözet a boltos haszna.
+- **Városi vásár:** reggelente a célszint másfélszerese fölötti készletet a boltos elviszi a városba (alapár 50%-áért). Ez a falu külső piaca és pénzforrása; enélkül a bolt megtelik, és a termelők pénz nélkül maradnak.
+- **Kocsma:** az étel a kocsma készletéből megy (kenyér vagy hal, a kenyér ára + 3 tallér), a kocsmáros a boltból tölti fel.
+- **Bér:** a bíró és a nyugdíjas tanítónő órabért kap a falutól, a zenészt a kocsmáros fizeti.
+- Éhes lakó: otthoni étel, ha nincs, akkor vásárlás a boltban, ha az sincs, akkor a kocsma. Az LLM is választhatja a `vásárol` tevékenységet; a promptban benne vannak az aktuális árak.
+
 Melyik lakó dönt LLM-mel: `--llm-agents joska` (alap), `--llm-agents bela,mari` vagy `--llm-agents all`.
 
 Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_ROUTINE`, `LLM_MODEL_STRONG`, `LLM_MAX_USD_TOTAL` (5), `LLM_MAX_USD_PER_DAY` (2), `LLM_MAX_CALLS_PER_SIM_DAY` (600), `LLM_ON_BUDGET` (`pause`|`autopilot`).
@@ -82,7 +91,7 @@ Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_R
 - [x] 3. LLM-döntés, mock mód, költségszámláló
 - [x] 4. Memória, reflexió, napi terv
 - [x] 5. Beszélgetések, kapcsolatok, pletyka
-- [ ] 6. Gazdaság
+- [x] 6. Gazdaság
 - [ ] 7. „Amíg nem néztél oda”
 - [ ] 8. Isten-mód
 - [ ] 9. Kapcsolati gráf, lakóprofil

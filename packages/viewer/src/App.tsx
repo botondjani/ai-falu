@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeEvent, formatTime, lookupFrom, tickToTime, type DecisionSource } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
-import type { LlmStats } from "@falu/sim";
+import type { LlmStats, MarketView } from "@falu/sim";
+
+/** Ezek túl gyakoriak a feedhez. */
+const QUIET = new Set(["earned", "produced", "sold", "arrived"]);
 
 const SPEEDS = [
   { label: "lassú (20 perc/nap)", value: 1200 },
@@ -38,7 +41,7 @@ export function App() {
   const names = useMemo(() => lookupFrom(state.agents, state.map?.locations ?? []), [state.agents, state.map]);
   const time = tickToTime(state.tick);
   const feed = useMemo(
-    () => state.events.filter((e) => e.type !== "earned" && e.type !== "produced").slice(-80).reverse(),
+    () => state.events.filter((e) => !QUIET.has(e.type)).slice(-80).reverse(),
     [state.events],
   );
 
@@ -76,6 +79,7 @@ export function App() {
         </section>
 
         <CostPanel llm={state.llm} />
+        <MarketPanel market={state.market} />
 
         <section className="agents">
           <h2>Lakók ({state.agents.length})</h2>
@@ -188,6 +192,34 @@ function CostPanel({ llm }: { llm: LlmStats | null }) {
         {llm.failures > 0 && ` · ${llm.failures} hiba, ${llm.fallbacks} tartalék`}
       </div>
       {llm.budgetExceeded && <div className="paused">⛔ {llm.budgetExceeded}</div>}
+    </section>
+  );
+}
+
+function MarketPanel({ market }: { market: MarketView | null }) {
+  const [open, setOpen] = useState(false);
+  if (!market) return null;
+  return (
+    <section className="market">
+      <h2 onClick={() => setOpen(!open)} style={{ cursor: "pointer" }}>
+        Piac {open ? "▾" : "▸"}
+      </h2>
+      <div className="small">
+        {Object.entries(market.prices).map(([k, v]) => (
+          <span key={k} className="price">
+            {k} <b>{v}</b>
+          </span>
+        ))}
+        <span className="price">
+          kocsmai étel <b>{market.mealPrice}</b>
+        </span>
+      </div>
+      {open && (
+        <div className="small muted">
+          <div>Bolt: {Object.entries(market.shop).map(([k, v]) => `${k} ×${v}`).join(", ") || "üres"}</div>
+          <div>Kocsma: {Object.entries(market.tavern).map(([k, v]) => `${k} ×${v}`).join(", ") || "üres"}</div>
+        </div>
+      )}
     </section>
   );
 }

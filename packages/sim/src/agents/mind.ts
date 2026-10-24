@@ -193,7 +193,7 @@ export class LiveMind implements InputProvider {
         effort: "low",
         mock: () => mockDecision(agent, world),
       },
-      (d) => validateDecision(d, agent),
+      (d) => validateDecision(d, agent, world.state),
     );
     if (res.data) return toDesired(res.data);
     this.gateway.noteFallback();

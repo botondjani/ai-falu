@@ -19,6 +19,7 @@ export function startServer(runner: Runner, port: number): WebSocketServer {
       agents: runner.agentViews(),
       recentEvents: runner.recentEvents(),
       status: runner.status(),
+      market: runner.market(),
     });
     ws.on("message", (raw) => {
       let msg: ClientMessage;
@@ -46,6 +47,7 @@ export function startServer(runner: Runner, port: number): WebSocketServer {
       moves: r.moves,
       events: r.events,
       llm: runner.llmStats(),
+      market: runner.market(),
     });
   });
 

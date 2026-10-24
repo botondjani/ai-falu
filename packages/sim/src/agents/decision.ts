@@ -3,15 +3,19 @@ import {
   MINUTES_PER_TICK,
   RULES,
   Rng,
-  count,
+  SHOP,
+  TAVERN,
+  foodAtHome,
+  mealPrice,
   tickToTime,
+  type WorldState,
   type ActivityKind,
   type Agent,
   type DesiredActivity,
   type World,
 } from "@falu/core";
 
-export const ACTIVITY_KINDS = ["dolgozik", "pihen", "szórakozik", "sétál", "eszik", "alszik"] as const satisfies readonly ActivityKind[];
+export const ACTIVITY_KINDS = ["dolgozik", "pihen", "szórakozik", "sétál", "eszik", "alszik", "vásárol"] as const satisfies readonly ActivityKind[];
 const KINDS = ACTIVITY_KINDS;
 
 export function decisionSchema(locationIds: string[]) {
@@ -26,22 +30,28 @@ export function decisionSchema(locationIds: string[]) {
 export type Decision = z.infer<ReturnType<typeof decisionSchema>>;
 
 /** Tevékenység + helyszín szabályai. Terveknél az aktuális készletet nem nézzük. */
-export function checkActivity(kind: ActivityKind, loc: string, agent: Agent, opts: { planning?: boolean } = {}): string | undefined {
+export function checkActivity(
+  kind: ActivityKind,
+  loc: string,
+  agent: Agent,
+  opts: { planning?: boolean; state?: WorldState } = {},
+): string | undefined {
   if (kind === "dolgozik" && loc !== agent.workplaceId) return `dolgozni csak a munkahelyen (${agent.workplaceId}) lehet`;
+  if (kind === "vásárol" && loc !== SHOP) return `vásárolni a boltban (${SHOP}) lehet`;
   if (kind === "alszik" && loc !== agent.homeId) return `aludni csak otthon (${agent.homeId}) lehet`;
   if (kind === "eszik") {
     if (loc !== agent.homeId && loc !== "kocsma") return "enni otthon vagy a kocsmában lehet";
     if (opts.planning) return undefined;
-    if (loc === agent.homeId && count(agent.inventory, "kenyér") === 0) return "otthon nincs kenyér";
-    if (loc === "kocsma" && agent.money < RULES.mealPrice) return "nincs pénz a kocsmai ételre";
+    if (loc === agent.homeId && !foodAtHome(agent)) return "otthon nincs étel";
+    if (loc === TAVERN && opts.state && agent.money < mealPrice(opts.state)) return "nincs pénz a kocsmai ételre";
   }
   return undefined;
 }
 
 /** Szemantikai ellenőrzés (amit a JSON-séma nem tud kifejezni). Hibaszöveg vagy undefined. */
-export function validateDecision(d: Decision, agent: Agent): string | undefined {
+export function validateDecision(d: Decision, agent: Agent, state?: WorldState): string | undefined {
   if (!Number.isFinite(d.idotartam_perc)) return "az időtartam nem szám";
-  return checkActivity(d.cselekves, d.helyszin, agent);
+  return checkActivity(d.cselekves, d.helyszin, agent, { state });
 }
 
 export function toDesired(d: Decision): DesiredActivity {
@@ -61,6 +71,7 @@ const LINES: Record<(typeof KINDS)[number], string[]> = {
   pihen: ["Egy kis szusszanás nem árt.", "Ráér az még.", ""],
   szórakozik: ["Ki fizeti a következő kört?", "Mi újság a faluban?", "Hallottátok, mi történt?"],
   sétál: ["Szép idő van ma.", "Megnézem, mi van a téren.", ""],
+  vásárol: ["Megnézem, mi kapható.", ""],
   eszik: ["Korog a gyomrom.", "Egy kis harapnivaló jólesne.", ""],
   alszik: ["Lefekszem korán.", ""],
 };

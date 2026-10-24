@@ -10,7 +10,7 @@ export interface Needs {
   energy: number;
 }
 
-export type ActivityKind = "alszik" | "dolgozik" | "eszik" | "pihen" | "szórakozik" | "sétál";
+export type ActivityKind = "alszik" | "dolgozik" | "eszik" | "pihen" | "szórakozik" | "sétál" | "vásárol";
 
 /** Ki döntött: szabály-alapú autopilot, LLM, vagy LLM-hiba utáni tartalék. */
 export type DecisionSource = "auto" | "llm" | "fallback" | "terv";
@@ -117,7 +117,12 @@ export type SimEvent = EventBase &
     | { type: "produced"; agentId: string; item: Item; qty: number; locationId: string }
     | { type: "paid"; agentId: string; amount: number; to: string; reason: string }
     | { type: "earned"; agentId: string; amount: number; reason: string }
-    | { type: "took"; agentId: string; item: Item; qty: number; from: string }
+    | { type: "bought"; agentId: string; item: Item; qty: number; price: number; from: string }
+    | { type: "sold"; agentId: string; item: Item; qty: number; price: number; to: string }
+    | { type: "no_input"; agentId: string; item: Item }
+    | { type: "tool_broke"; agentId: string }
+    | { type: "exported"; agentId: string; item: Item; qty: number; price: number }
+    | { type: "prices"; prices: Partial<Record<Item, number>> }
     | { type: "starving"; agentId: string }
     | { type: "planned"; agentId: string; goal: string; items: number }
     | { type: "conversation"; agentId: string; a: string; b: string; topic: string; lines: ConversationLine[] }

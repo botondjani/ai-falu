@@ -1,7 +1,8 @@
 import { autopilotDecide, needsDecision, planDesired } from "./autopilot";
 import { addMemory, observeEvents, pruneMemories } from "./memory";
 import { applyConversation, initialRelation, relKey } from "./social";
-import { add, count, remove, transfer } from "./inventory";
+import { count, remove } from "./inventory";
+import { FOOD, SHOP, TAVERN, buyFromShop, currentPrices, exportSurplus, foodAtHome, initialStocks, mealPrice, ownerOf, workHour } from "./economy";
 import { buildVillageMap } from "./map/village";
 import { getLocation, type Point, type TileMap } from "./map/types";
 import { findPath } from "./pathfinding";
@@ -45,6 +46,7 @@ export function createWorld(seed: string, villagers: VillagerSeed[]): World {
     .sort((a, b) => a.id.localeCompare(b.id));
   const stocks: WorldState["stocks"] = {};
   for (const loc of map.locations) stocks[loc.id] = {};
+  Object.assign(stocks, initialStocks());
   const state: WorldState = {
     seed,
     tick: 0,
@@ -86,6 +88,8 @@ export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Dec
 
   if (tick % TICKS_PER_DAY === 0) {
     events.push({ tick, type: "day_started", day: tickToTime(tick).day });
+    exportSurplus(state, events);
+    events.push({ tick, type: "prices", prices: currentPrices(state) });
     if (tick > 0) pruneMemories(state);
   }
   applyMindInputs(state, inputs, events);
@@ -108,7 +112,7 @@ export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Dec
       onArrive(agent, tick);
     }
 
-    if (agent.activity?.arrived) performActivity(world, agent, events);
+    if (agent.activity?.arrived) performActivity(world, agent, events, rng);
 
     if (agent.needs.hunger >= RULES.starvingThreshold && tick % 12 === 0) {
       events.push({ tick, type: "starving", agentId: agent.id });
@@ -201,17 +205,28 @@ function moveAlongPath(agent: Agent): Point[] {
   return trail;
 }
 
-function performActivity(world: World, agent: Agent, events: SimEvent[]) {
+function performActivity(world: World, agent: Agent, events: SimEvent[], rng: Rng) {
   const a = agent.activity!;
-  const tick = world.state.tick;
+  const state = world.state;
+  const tick = state.tick;
 
   if (a.kind === "eszik" && a.untilTick !== undefined && tick >= a.untilTick) {
-    if (a.locationId === agent.homeId && remove(agent.inventory, "kenyér")) {
-      events.push({ tick, type: "ate", agentId: agent.id, what: "kenyér", locationId: a.locationId });
-    } else if (agent.money >= RULES.mealPrice) {
-      agent.money -= RULES.mealPrice;
-      events.push({ tick, type: "paid", agentId: agent.id, amount: RULES.mealPrice, to: a.locationId, reason: "étel" });
-      events.push({ tick, type: "ate", agentId: agent.id, what: "meleg étel", locationId: a.locationId });
+    const homeFood = a.locationId === agent.homeId ? foodAtHome(agent) : undefined;
+    const tavern = state.stocks[TAVERN];
+    const tavernFood = a.locationId === TAVERN ? FOOD.find((f) => count(tavern, f) > 0) : undefined;
+    const owner = ownerOf(state, TAVERN);
+    const price = owner === agent ? 0 : mealPrice(state);
+    if (homeFood) {
+      remove(agent.inventory, homeFood);
+      events.push({ tick, type: "ate", agentId: agent.id, what: homeFood, locationId: a.locationId });
+    } else if (tavernFood && agent.money >= price) {
+      remove(tavern, tavernFood);
+      if (price > 0) {
+        agent.money -= price;
+        if (owner) owner.money += price;
+        events.push({ tick, type: "paid", agentId: agent.id, amount: price, to: a.locationId, reason: "étel" });
+      }
+      events.push({ tick, type: "ate", agentId: agent.id, what: tavernFood === "hal" ? "sült hal" : "zsíros kenyér", locationId: a.locationId });
     } else {
       // Nincs mit enni: abbahagyja, a következő döntésnél mást választ.
       agent.activity = null;
@@ -222,27 +237,21 @@ function performActivity(world: World, agent: Agent, events: SimEvent[]) {
     return;
   }
 
+  if (a.kind === "vásárol") {
+    // Megérkezett a boltba: élelmet vesz (legfeljebb 3 legyen otthon).
+    if (a.locationId === SHOP) {
+      const have = FOOD.reduce((n, f) => n + count(agent.inventory, f), 0);
+      if (have < 3) buyFromShop(state, agent, "kenyér", 3 - have, agent.inventory, events);
+    }
+    agent.activity = null;
+    return;
+  }
+
   if (a.kind === "dolgozik" && a.locationId === agent.workplaceId) {
     agent.workProgress++;
     if (agent.workProgress >= RULES.workTicksPerProduct) {
       agent.workProgress = 0;
-      if (agent.produces) {
-        add(world.state.stocks[a.locationId], agent.produces, 1);
-        events.push({ tick, type: "produced", agentId: agent.id, item: agent.produces, qty: 1, locationId: a.locationId });
-      }
-      agent.money += RULES.wagePerProduct;
-      events.push({ tick, type: "earned", agentId: agent.id, amount: RULES.wagePerProduct, reason: "munka" });
-    }
-    // A pék a műszak végén hazavisz egy kenyeret, ha kevés van otthon.
-    const { hour, minute } = tickToTime(tick);
-    if (
-      hour === RULES.workEndHour - 1 &&
-      minute === 55 &&
-      agent.produces === "kenyér" &&
-      count(agent.inventory, "kenyér") < 2 &&
-      transfer(world.state.stocks[a.locationId], agent.inventory, "kenyér", 1)
-    ) {
-      events.push({ tick, type: "took", agentId: agent.id, item: "kenyér", qty: 1, from: a.locationId });
+      workHour(state, agent, rng, events);
     }
   }
 }

@@ -1,7 +1,7 @@
-import { TICKS_PER_DAY, knownGossip, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
+import { SHOP, TAVERN, TICKS_PER_DAY, currentPrices, knownGossip, mealPrice, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
 import type { InputProvider } from "./agents/mind";
 import { BudgetExceededError, type LlmStats } from "./llm/gateway";
-import type { AgentView, SimStatus } from "./protocol";
+import type { AgentView, MarketView, SimStatus } from "./protocol";
 import type { EventStore } from "./store";
 
 export interface RunnerOptions {
@@ -171,6 +171,11 @@ export class Runner {
   /** Leállításkor snapshot, hogy a folytatás ne a nap elejéről induljon. */
   flush() {
     if (this.store && this.runId !== undefined) this.store.saveSnapshot(this.runId, this.world.state);
+  }
+
+  market(): MarketView {
+    const st = this.world.state;
+    return { prices: currentPrices(st), shop: { ...st.stocks[SHOP] }, tavern: { ...st.stocks[TAVERN] }, mealPrice: mealPrice(st) };
   }
 
   agentViews(): AgentView[] {

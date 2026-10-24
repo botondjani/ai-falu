@@ -52,3 +52,8 @@ button, select { background: #2a3240; color: var(--text); border: 1px solid var(
 .neg { color: #eb7a7a; }
 .agents { max-height: 38vh; overflow-y: auto; flex-shrink: 0; }
 .feed { min-height: 120px; }
+.price { display: inline-block; margin-right: 10px; }
+.price b { color: #f1c40f; }
+.ev-bought, .ev-exported { color: #9fd3c7; }
+.ev-tool_broke, .ev-no_input { color: #e6a15c; }
+.ev-prices { color: #f1c40f; }

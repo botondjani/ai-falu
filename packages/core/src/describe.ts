@@ -33,8 +33,18 @@ export function describeEvent(e: SimEvent, n: NameLookup): string {
       return `${n.agent(e.agentId)} fizetett ${e.amount} tallért (${e.reason})`;
     case "earned":
       return `${n.agent(e.agentId)} keresett ${e.amount} tallért`;
-    case "took":
-      return `${n.agent(e.agentId)} hazavitt: ${e.qty} ${e.item}`;
+    case "bought":
+      return `${n.agent(e.agentId)} vett: ${e.qty} ${e.item} (${e.price} tallér)`;
+    case "sold":
+      return `${n.agent(e.agentId)} eladott a boltnak: ${e.qty} ${e.item} (${e.price} tallér)`;
+    case "no_input":
+      return `${n.agent(e.agentId)} nem tud dolgozni: nincs ${e.item}`;
+    case "tool_broke":
+      return `${n.agent(e.agentId)} eltörte a szerszámát`;
+    case "exported":
+      return `${n.agent(e.agentId)} a városi vásárba vitt: ${e.qty} ${e.item} (${e.price} tallér)`;
+    case "prices":
+      return `Árak a boltban: ${Object.entries(e.prices).map(([k, v]) => `${k} ${v}`).join(", ")}`;
     case "starving":
       return `${n.agent(e.agentId)} nagyon éhes!`;
     case "planned":

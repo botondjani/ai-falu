@@ -30,8 +30,23 @@ export interface SimStatus {
   llm?: LlmStats;
 }
 
+export interface MarketView {
+  prices: Partial<Record<string, number>>;
+  shop: Inventory;
+  tavern: Inventory;
+  mealPrice: number;
+}
+
 export type ServerMessage =
-  | { type: "init"; map: TileMap; tick: number; agents: AgentView[]; recentEvents: SimEvent[]; status: SimStatus }
+  | {
+      type: "init";
+      map: TileMap;
+      tick: number;
+      agents: AgentView[];
+      recentEvents: SimEvent[];
+      status: SimStatus;
+      market: MarketView;
+    }
   | {
       type: "tick";
       tick: number;
@@ -40,6 +55,7 @@ export type ServerMessage =
       moves: Record<string, Point[]>;
       events: SimEvent[];
       llm?: LlmStats;
+      market: MarketView;
     }
   | { type: "status"; status: SimStatus };
 

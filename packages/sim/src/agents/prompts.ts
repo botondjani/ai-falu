@@ -1,7 +1,8 @@
 import {
-  RULES,
   count,
+  currentPrices,
   currentPlanItem,
+  mealPrice,
   describeEvent,
   formatTime,
   lookupFrom,
@@ -22,8 +23,9 @@ A FALU HELYEI (azonosító: név):
 ${places}
 
 TEVÉKENYSÉGEK:
-- dolgozik: csak a saját munkahelyén. Munkával pénzt keres (${RULES.wagePerProduct} tallér óránként nagyjából) és terméket állít elő.
-- eszik: otthon, ha van kenyér a készletben; vagy a kocsmában ${RULES.mealPrice} tallérért.
+- dolgozik: csak a saját munkahelyén. A termelők (gabona, fa, hal, gyógyfű, kenyér, szerszám) óránként termelnek, a fölösleget eladják a boltnak; a pék gabonából, a kovács fából dolgozik. A bolt a haszonból, a kocsma az ételből él, a többiek órabért kapnak.
+- vásárol: a boltban (bolt) kenyeret vesz haza.
+- eszik: otthon, ha van kenyér vagy hal; vagy a kocsmában (a kenyér boltbeli ára + 3 tallérért), ha van ott étel.
 - pihen: bárhol, leginkább otthon.
 - szórakozik: a kocsmában vagy a téren, társaságban.
 - sétál: a téren, a folyóparton, az erdőben vagy a mezőn.
@@ -32,7 +34,8 @@ TEVÉKENYSÉGEK:
 SZABÁLYOK:
 - Az idő 5 perces lépésekben halad. A munkaidő nagyjából 8 és 17 óra között van, éjjel (22-6) mindenki alszik.
 - Éhség (0 jóllakott – 100 éhezik) és energia (0 kimerült – 100 kipihent). Ha nagyon éhes vagy fáradt, a program magától elküldi enni vagy aludni.
-- Pénz nélkül nincs kocsmai étel. A munka pénzt hoz.
+- Pénz nélkül nincs étel. A munka pénzt hoz.
+- GAZDASÁG: a bolt árai a készlettől függnek: ha kevés van valamiből, drágább, ha sok, olcsóbb. A bolt csak addig vásárol fel, amíg van rá pénze és helye.
 
 A VÁLASZOD:
 - Válassz egy tevékenységet és helyszínt, és hogy hány percig tartson (15–240).
@@ -71,7 +74,8 @@ export function situationText(agent: Agent, world: World, recent: SimEvent[]): s
 ${plan}${agent.surprised ? "\nValami váratlan történt, lehet, hogy el kell térned a tervtől." : ""}
 Hol vagy: ${here ? n.place(here) : "úton"}${agent.activity ? `, épp: ${agent.activity.kind}` : ""}.
 Éhség: ${Math.round(agent.needs.hunger)}/100, energia: ${Math.round(agent.needs.energy)}/100.
-Pénz: ${agent.money} tallér. Nálad/otthon: ${inv} (otthoni kenyér: ${count(agent.inventory, "kenyér")}).
+Pénz: ${agent.money} tallér. Nálad/otthon: ${inv}.
+Árak a boltban: ${Object.entries(currentPrices(world.state)).map(([k, v]) => `${k} ${v}`).join(", ")}; kocsmai étel: ${mealPrice(world.state)}.
 Itt van még: ${nearby.length ? nearby.join(", ") : "senki"}.
 Legutóbbi történések veled:
 ${lines.length ? lines.join("\n") : "- semmi különös"}

@@ -54,8 +54,9 @@ describe("döntés validálása", () => {
     expect(validateDecision({ ...good, helyszin: "kocsma" }, a)).toMatch(/munkahely/);
   });
   it("evés pénz/kenyér nélkül nem megy", () => {
-    expect(validateDecision({ ...good, cselekves: "eszik", helyszin: a.homeId }, { ...a, inventory: {} })).toMatch(/kenyér/);
-    expect(validateDecision({ ...good, cselekves: "eszik", helyszin: "kocsma" }, { ...a, money: 0 })).toMatch(/pénz/);
+    expect(validateDecision({ ...good, cselekves: "eszik", helyszin: a.homeId }, { ...a, inventory: {} })).toMatch(/étel/);
+    expect(validateDecision({ ...good, cselekves: "eszik", helyszin: "kocsma" }, { ...a, money: 0 }, world.state)).toMatch(/pénz/);
+    expect(validateDecision({ ...good, cselekves: "vásárol", helyszin: "kocsma" }, a)).toMatch(/boltban/);
   });
   it("a mock döntés mindig érvényes", () => {
     const schema = decisionSchema(world.map.locations.map((l) => l.id));
