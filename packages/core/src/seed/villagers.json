@@ -1,0 +1,471 @@
+[
+  {
+    "id": "bela",
+    "name": "Kovács Béla",
+    "age": 47,
+    "occupation": "kovács",
+    "traits": [
+      "morcos",
+      "szorgalmas",
+      "büszke"
+    ],
+    "secretDesire": "Szeretné, ha a falu őt választaná bírónak.",
+    "homeId": "haz_1",
+    "workplaceId": "kovacs",
+    "produces": "szerszám",
+    "color": "#c0392b",
+    "relationships": [
+      {
+        "with": "mari",
+        "kind": "régi barát"
+      },
+      {
+        "with": "gabor",
+        "kind": "riválisa"
+      },
+      {
+        "with": "dani",
+        "kind": "az inasa, akit túl lassúnak tart"
+      }
+    ],
+    "money": 45,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "dani",
+    "name": "Balogh Dániel",
+    "age": 24,
+    "occupation": "kovácsinas",
+    "traits": [
+      "optimista",
+      "ügyetlen",
+      "szerelmes természetű"
+    ],
+    "secretDesire": "Saját műhelyt akar nyitni, Béla orra előtt.",
+    "homeId": "haz_1",
+    "workplaceId": "kovacs",
+    "produces": "szerszám",
+    "color": "#e74c3c",
+    "relationships": [
+      {
+        "with": "bela",
+        "kind": "mestere, akitől tart"
+      },
+      {
+        "with": "kati",
+        "kind": "tetszik neki"
+      }
+    ],
+    "money": 15,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "mari",
+    "name": "Pék Mari",
+    "age": 44,
+    "occupation": "pék",
+    "traits": [
+      "kedves",
+      "pletykás",
+      "korán kelő"
+    ],
+    "secretDesire": "Titokban városi cukrászdát nyitna.",
+    "homeId": "haz_2",
+    "workplaceId": "pekseg",
+    "produces": "kenyér",
+    "color": "#f39c12",
+    "relationships": [
+      {
+        "with": "bela",
+        "kind": "régi barát"
+      },
+      {
+        "with": "joska",
+        "kind": "gyanakszik rá"
+      },
+      {
+        "with": "eszter",
+        "kind": "vetélytársa a faluban"
+      }
+    ],
+    "money": 50,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "kati",
+    "name": "Pék Katalin",
+    "age": 19,
+    "occupation": "pékinas",
+    "traits": [
+      "álmodozó",
+      "makacs",
+      "ügyes kezű"
+    ],
+    "secretDesire": "Titokban Danibe szerelmes.",
+    "homeId": "haz_2",
+    "workplaceId": "pekseg",
+    "produces": "kenyér",
+    "color": "#f5b041",
+    "relationships": [
+      {
+        "with": "mari",
+        "kind": "az anyja"
+      },
+      {
+        "with": "miklos",
+        "kind": "kacérkodik vele"
+      }
+    ],
+    "money": 8,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "joska",
+    "name": "Szabó Jóska",
+    "age": 29,
+    "occupation": "földműves",
+    "traits": [
+      "lusta",
+      "vicces",
+      "nagyravágyó"
+    ],
+    "secretDesire": "Meg akarja venni a kocsmát.",
+    "homeId": "haz_3",
+    "workplaceId": "mezo",
+    "produces": "gabona",
+    "color": "#27ae60",
+    "relationships": [
+      {
+        "with": "gizi",
+        "kind": "tartozik neki"
+      },
+      {
+        "with": "feri",
+        "kind": "az öccse"
+      }
+    ],
+    "money": 12,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "feri",
+    "name": "Szabó Ferenc",
+    "age": 22,
+    "occupation": "földműves",
+    "traits": [
+      "lelkes",
+      "hirtelen haragú",
+      "becsületes"
+    ],
+    "secretDesire": "Katonának menne a városba.",
+    "homeId": "haz_3",
+    "workplaceId": "mezo",
+    "produces": "gabona",
+    "color": "#2ecc71",
+    "relationships": [
+      {
+        "with": "joska",
+        "kind": "a bátyja, akit szégyell"
+      }
+    ],
+    "money": 10,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "rozsi",
+    "name": "Horváth Rozália",
+    "age": 45,
+    "occupation": "földműves",
+    "traits": [
+      "anyáskodó",
+      "babonás",
+      "beszédes"
+    ],
+    "secretDesire": "Azt hiszi, Lajos kincset rejtett a folyóparton, és meg akarja találni.",
+    "homeId": "haz_8",
+    "workplaceId": "mezo",
+    "produces": "gabona",
+    "color": "#16a085",
+    "relationships": [
+      {
+        "with": "lajos",
+        "kind": "gyanúsítja"
+      },
+      {
+        "with": "teri",
+        "kind": "jó barátnője"
+      }
+    ],
+    "money": 25,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "gizi",
+    "name": "Fekete Gizella",
+    "age": 52,
+    "occupation": "kocsmáros",
+    "traits": [
+      "éles nyelvű",
+      "vendégszerető",
+      "számító"
+    ],
+    "secretDesire": "Eladná a kocsmát, és a Balatonhoz költözne.",
+    "homeId": "haz_4",
+    "workplaceId": "kocsma",
+    "color": "#8e44ad",
+    "relationships": [
+      {
+        "with": "joska",
+        "kind": "tartozik neki"
+      },
+      {
+        "with": "lajos",
+        "kind": "régi szerelme"
+      },
+      {
+        "with": "miklos",
+        "kind": "a zenésze"
+      }
+    ],
+    "money": 80,
+    "inventory": {
+      "kenyér": 3
+    }
+  },
+  {
+    "id": "miklos",
+    "name": "Kocsis Miklós",
+    "age": 36,
+    "occupation": "vándorzenész",
+    "traits": [
+      "vidám",
+      "felelőtlen",
+      "csábító"
+    ],
+    "secretDesire": "Adósságai elől menekült a faluba.",
+    "homeId": "haz_5",
+    "workplaceId": "kocsma",
+    "color": "#9b59b6",
+    "relationships": [
+      {
+        "with": "gizi",
+        "kind": "a munkaadója"
+      },
+      {
+        "with": "kati",
+        "kind": "tetszik neki"
+      }
+    ],
+    "money": 5,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "lajos",
+    "name": "Varga Lajos",
+    "age": 63,
+    "occupation": "halász",
+    "traits": [
+      "csendes",
+      "bölcs",
+      "babonás"
+    ],
+    "secretDesire": "Fiatalon ő lopta el a falu harangját, és máig bántja.",
+    "homeId": "haz_5",
+    "workplaceId": "folyo",
+    "produces": "hal",
+    "color": "#2980b9",
+    "relationships": [
+      {
+        "with": "gizi",
+        "kind": "régi szerelme"
+      },
+      {
+        "with": "rozsi",
+        "kind": "kerüli"
+      }
+    ],
+    "money": 30,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "eszter",
+    "name": "Szűcsné Molnár Eszter",
+    "age": 39,
+    "occupation": "boltos",
+    "traits": [
+      "pontos",
+      "gyanakvó",
+      "takarékos"
+    ],
+    "secretDesire": "Titokban verseket ír, és ki akarja adatni.",
+    "homeId": "haz_6",
+    "workplaceId": "bolt",
+    "color": "#3498db",
+    "relationships": [
+      {
+        "with": "gabor",
+        "kind": "a férje"
+      },
+      {
+        "with": "mari",
+        "kind": "vetélytársa"
+      },
+      {
+        "with": "pista",
+        "kind": "furcsán néz rá"
+      }
+    ],
+    "money": 70,
+    "inventory": {
+      "kenyér": 3
+    }
+  },
+  {
+    "id": "gabor",
+    "name": "Szűcs Gábor",
+    "age": 55,
+    "occupation": "a falu bírója",
+    "traits": [
+      "tekintélyes",
+      "hiú",
+      "óvatos"
+    ],
+    "secretDesire": "Elsikkasztotta a kútépítésre gyűjtött pénzt.",
+    "homeId": "haz_6",
+    "workplaceId": "ter",
+    "color": "#34495e",
+    "relationships": [
+      {
+        "with": "eszter",
+        "kind": "a felesége"
+      },
+      {
+        "with": "bela",
+        "kind": "riválisa"
+      },
+      {
+        "with": "anna",
+        "kind": "fél tőle"
+      }
+    ],
+    "money": 90,
+    "inventory": {
+      "kenyér": 3
+    }
+  },
+  {
+    "id": "pista",
+    "name": "Kiss István",
+    "age": 41,
+    "occupation": "favágó",
+    "traits": [
+      "erős",
+      "jószívű",
+      "naiv"
+    ],
+    "secretDesire": "Szerelmes Eszterbe.",
+    "homeId": "haz_7",
+    "workplaceId": "erdo",
+    "produces": "fa",
+    "color": "#a0522d",
+    "relationships": [
+      {
+        "with": "eszter",
+        "kind": "titkos szerelme"
+      },
+      {
+        "with": "anna",
+        "kind": "a húga"
+      },
+      {
+        "with": "bela",
+        "kind": "jó cimborája"
+      }
+    ],
+    "money": 20,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "anna",
+    "name": "Kiss Anna",
+    "age": 33,
+    "occupation": "füvesasszony",
+    "traits": [
+      "titokzatos",
+      "segítőkész",
+      "éles eszű"
+    ],
+    "secretDesire": "Tudja, hogy Gábor sikkasztott, de nincs rá bizonyítéka.",
+    "homeId": "haz_7",
+    "workplaceId": "erdo",
+    "produces": "gyógyfű",
+    "color": "#1abc9c",
+    "relationships": [
+      {
+        "with": "gabor",
+        "kind": "nem bízik benne"
+      },
+      {
+        "with": "pista",
+        "kind": "a bátyja"
+      }
+    ],
+    "money": 22,
+    "inventory": {
+      "kenyér": 2
+    }
+  },
+  {
+    "id": "teri",
+    "name": "Nagy Teréz",
+    "age": 70,
+    "occupation": "nyugalmazott tanítónő",
+    "traits": [
+      "kíváncsi",
+      "szigorú",
+      "jó emlékezetű"
+    ],
+    "secretDesire": "Meg akarja írni a falu krónikáját, minden botránnyal együtt.",
+    "homeId": "haz_8",
+    "workplaceId": "ter",
+    "color": "#7f8c8d",
+    "relationships": [
+      {
+        "with": "mari",
+        "kind": "volt tanítványa"
+      },
+      {
+        "with": "rozsi",
+        "kind": "jó barátnője"
+      },
+      {
+        "with": "gabor",
+        "kind": "nem hisz neki"
+      }
+    ],
+    "money": 40,
+    "inventory": {
+      "kenyér": 2
+    }
+  }
+]

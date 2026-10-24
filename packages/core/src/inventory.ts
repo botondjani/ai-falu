@@ -1,4 +1,4 @@
-export type Item = "kenyér" | "gabona" | "fa" | "szerszám" | "liszt";
+export type Item = "kenyér" | "gabona" | "fa" | "szerszám" | "liszt" | "hal" | "gyógyfű";
 export type Inventory = Partial<Record<Item, number>>;
 
 export function count(inv: Inventory, item: Item): number {

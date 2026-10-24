@@ -1,4 +1,4 @@
-import { DEMO_VILLAGERS, TICKS_PER_DAY, createWorld, describeEvent, lookupFrom, stamp, timeToTick, type World } from "@falu/core";
+import { DEMO_VILLAGERS, TICKS_PER_DAY, VILLAGERS, createWorld, describeEvent, lookupFrom, stamp, timeToTick, type World } from "@falu/core";
 import { LiveMind, ReplayInputs } from "./agents/mind";
 import { llmConfig, loadDotEnv } from "./config";
 import { AnthropicClient } from "./llm/anthropic";
@@ -23,6 +23,7 @@ interface CliArgs {
   verify?: number;
   listRuns: boolean;
   llmAgents: string;
+  villagers: "full" | "demo";
 }
 
 const HELP = `Használat: npm run sim -- [kapcsolók]
@@ -38,7 +39,8 @@ const HELP = `Használat: npm run sim -- [kapcsolók]
   --from-day D      visszajátszás kezdőnapja (alap: 1)
   --verify ID       determinizmus-ellenőrzés: újraszimulál és összeveti a naplóval
   --list-runs       futások listája
-  --llm-agents L    LLM-mel döntő lakók: vesszős lista vagy "all" (alap: joska)
+  --llm-agents L    LLM-mel gondolkodó lakók: vesszős lista vagy "all" (alap: all)
+  --demo            csak a 3 demó lakó (alap: a teljes, 15 fős falu)
   -v, --verbose     minden esemény kiírása
 `;
 
@@ -52,7 +54,8 @@ function parseArgs(argv: string[]): CliArgs {
     db: process.env.SIM_DB ?? "data/falu.db",
     fromDay: 1,
     listRuns: false,
-    llmAgents: process.env.SIM_LLM_AGENTS ?? "joska",
+    llmAgents: process.env.SIM_LLM_AGENTS ?? "all",
+    villagers: "full",
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -73,6 +76,7 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === "--verify") args.verify = Number(next());
     else if (a === "--list-runs") args.listRuns = true;
     else if (a === "--llm-agents") args.llmAgents = next();
+    else if (a === "--demo") args.villagers = "demo";
     else if (a === "--verbose" || a === "-v") args.verbose = true;
     else if (a === "--help" || a === "-h") {
       console.log(HELP);
@@ -144,6 +148,7 @@ async function main() {
     };
   };
 
+  const villagers = args.villagers === "demo" ? DEMO_VILLAGERS : VILLAGERS;
   let runner: Runner;
   if (args.resume !== undefined) {
     const id = args.resume === "latest" ? store.latestRunId() : args.resume;
@@ -154,9 +159,9 @@ async function main() {
     runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id, ...withLlm(id) });
     console.log(`Folytatás: #${id} ${stamp(snap.tick)}-tól`);
   } else {
-    const runId = store.createRun(args.seed, { mock: client.mock, villagers: DEMO_VILLAGERS.length, llmAgents: args.llmAgents });
+    const runId = store.createRun(args.seed, { mock: client.mock, villagers: villagers.length, llmAgents: args.llmAgents });
     runner = new Runner({
-      world: createWorld(args.seed, DEMO_VILLAGERS),
+      world: createWorld(args.seed, villagers),
       secondsPerDay: args.secondsPerDay,
       store,
       runId,

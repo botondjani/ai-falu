@@ -17,6 +17,16 @@ npm run typecheck
 
 **API-kulcs nélkül is működik:** ha nincs `ANTHROPIC_API_KEY`, a szimuláció automatikusan mock módban fut (autopilot + mock LLM), költség nélkül.
 
+### Lakosság
+
+A falu 15 lakója a `packages/core/src/seed/villagers.json` fájlban van: név, kor, foglalkozás, jellem, titkos vágy, kapcsolatok, otthon és munkahely. A fájl LLM-mel készült, és rögzítve van, ezért minden futás ugyanabból indul. Újragenerálás (API-kulccsal, egy Sonnet-hívás, kb. $0.05):
+
+```bash
+npm run generate-villagers -- --count 15 --theme "egy kicsit misztikus falu"
+```
+
+`--demo` kapcsolóval csak a 3 demó lakó fut.
+
 ### Napló és visszajátszás
 
 Minden esemény egy append-only SQLite naplóba kerül (`data/falu.db`), naponta snapshottal. A futás seedelt és determinisztikus, ezért bármikor pontosan újrajátszható.
