@@ -1,0 +1,20 @@
+/** A világ hangolható számai egy helyen. */
+export const RULES = {
+  moveTilesPerTick: 4,
+  hungerPerTickAwake: 0.45,
+  hungerPerTickAsleep: 0.2,
+  energyPerTickAwake: 0.4,
+  energyPerTickAsleep: 1.1,
+  hungryThreshold: 60,
+  starvingThreshold: 95,
+  exhaustedThreshold: 12,
+  eatDurationTicks: 6,
+  eatHungerRelief: 60,
+  mealPrice: 6,
+  workTicksPerProduct: 12,
+  wagePerProduct: 3,
+  workStartHour: 8,
+  workEndHour: 17,
+  sleepHour: 22,
+  wakeHour: 6,
+} as const;

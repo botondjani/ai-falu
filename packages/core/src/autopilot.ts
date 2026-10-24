@@ -1,0 +1,55 @@
+import { count } from "./inventory";
+import { RULES } from "./rules";
+import { hourBetween, tickToTime } from "./time";
+import type { Agent, DesiredActivity, WorldState } from "./types";
+import type { Rng } from "./rng";
+
+/**
+ * Szabály-alapú viselkedés: alvás, evés, munka, esti kikapcsolódás.
+ * Akkor is ez fut, ha az LLM nem elérhető, vagy rutinhelyzet van.
+ */
+export function autopilotDecide(agent: Agent, state: WorldState, rng: Rng): DesiredActivity {
+  const { hour } = tickToTime(state.tick);
+  const cur = agent.activity;
+
+  // Folyamatban lévő evést nem szakítunk meg.
+  if (cur?.kind === "eszik" && (cur.untilTick === undefined || state.tick < cur.untilTick)) {
+    return keep(cur);
+  }
+
+  if (agent.needs.energy < RULES.exhaustedThreshold) {
+    return { kind: "alszik", locationId: agent.homeId, reason: "kimerült" };
+  }
+
+  const night = hourBetween(hour, RULES.sleepHour, RULES.wakeHour);
+  if (cur?.kind === "alszik" && (night || agent.needs.energy < 60)) return keep(cur);
+  if (night) return { kind: "alszik", locationId: agent.homeId, reason: "késő van" };
+
+  if (agent.needs.hunger >= RULES.hungryThreshold) {
+    if (count(agent.inventory, "kenyér") > 0) {
+      return { kind: "eszik", locationId: agent.homeId, reason: "éhes, van otthon kenyér" };
+    }
+    if (agent.money >= RULES.mealPrice) {
+      return { kind: "eszik", locationId: "kocsma", reason: "éhes, a kocsmában eszik" };
+    }
+    // nincs étel és pénz: dolgozik tovább, hátha keres valamit
+  }
+
+  if (hourBetween(hour, RULES.workStartHour, RULES.workEndHour)) {
+    return { kind: "dolgozik", locationId: agent.workplaceId, reason: "munkaidő" };
+  }
+
+  if (hourBetween(hour, 18, RULES.sleepHour)) {
+    if (cur?.kind === "szórakozik") return keep(cur);
+    const where = rng.chance(0.6) ? "kocsma" : "ter";
+    return { kind: "szórakozik", locationId: where, reason: "esti kikapcsolódás" };
+  }
+
+  if (cur?.kind === "pihen" || cur?.kind === "sétál") return keep(cur);
+  if (rng.chance(0.3)) return { kind: "sétál", locationId: "ter", reason: "kis séta a téren" };
+  return { kind: "pihen", locationId: agent.homeId, reason: "otthon pihen" };
+}
+
+function keep(a: { kind: DesiredActivity["kind"]; locationId: string; reason: string }): DesiredActivity {
+  return { kind: a.kind, locationId: a.locationId, reason: a.reason };
+}

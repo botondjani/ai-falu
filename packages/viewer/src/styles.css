@@ -1,0 +1,41 @@
+:root {
+  --bg: #14181f;
+  --panel: #1c222c;
+  --line: #2c3442;
+  --text: #e6e6e6;
+  --muted: #8b95a5;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+.layout { display: flex; height: 100%; }
+.map { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.panel { width: 360px; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+.panel section, .panel header { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-size: 20px; }
+h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.clock { font-size: 15px; margin-top: 4px; }
+.conn { font-size: 11px; margin-top: 2px; }
+.conn.ok { color: #2ecc71; }
+.conn.bad { color: #e74c3c; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, select { background: #2a3240; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.paused { color: #f1c40f; font-size: 12px; width: 100%; }
+.agent { padding: 6px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; }
+.agent:hover, .agent.sel { background: #252d3a; }
+.agent-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.money { margin-left: auto; color: #f1c40f; font-size: 12px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.muted { color: var(--muted); }
+.small { font-size: 11px; }
+.detail { margin-top: 4px; color: #c8cdd5; }
+.bar { display: flex; align-items: center; gap: 6px; font-size: 10px; margin-top: 3px; }
+.bar-label { width: 50px; color: var(--muted); }
+.bar-track { flex: 1; height: 5px; background: #2a3240; border-radius: 3px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; }
+.feed { flex: 1; overflow-y: auto; font-size: 11px; line-height: 1.5; }
+.ev-day_started { color: #f1c40f; font-weight: bold; }
+.ev-starving { color: #e74c3c; }
+.ev-ate, .ev-paid { color: #d0b0ff; }
