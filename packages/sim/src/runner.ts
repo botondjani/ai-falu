@@ -153,6 +153,7 @@ export class Runner {
       pausedReason: this.pausedReason,
       llm: this.llmStats(),
       mode: this.mode,
+      godMode: this.mode === "élő",
       runId: this.runId,
     };
   }

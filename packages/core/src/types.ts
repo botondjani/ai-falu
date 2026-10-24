@@ -2,6 +2,7 @@ import type { Inventory, Item } from "./inventory";
 import type { Point } from "./map/types";
 import type { DayPlan, Memory } from "./memory";
 import type { Conversation, ConversationLine, Gossip, Relation } from "./social";
+import type { GodEvent } from "./god";
 
 export interface Needs {
   /** 0 = jóllakott, 100 = éhezik */
@@ -13,7 +14,7 @@ export interface Needs {
 export type ActivityKind = "alszik" | "dolgozik" | "eszik" | "pihen" | "szórakozik" | "sétál" | "vásárol";
 
 /** Ki döntött: szabály-alapú autopilot, LLM, vagy LLM-hiba utáni tartalék. */
-export type DecisionSource = "auto" | "llm" | "fallback" | "terv";
+export type DecisionSource = "auto" | "llm" | "fallback" | "terv" | "isten";
 
 export interface Activity {
   kind: ActivityKind;
@@ -94,6 +95,10 @@ export interface ExternalInputs {
   reflections?: Record<string, Reflection>;
   /** kulcs: "a|b" */
   conversations?: Record<string, Conversation>;
+  /** Isten-mód események (kulcs: sorszám). */
+  god?: Record<string, GodEvent>;
+  /** Suttogások (kulcs: lakó). */
+  whispers?: Record<string, string>;
 }
 
 interface EventBase {

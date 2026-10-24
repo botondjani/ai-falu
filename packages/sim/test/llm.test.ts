@@ -187,3 +187,44 @@ describe("beszélgetés (LLM-réteg)", () => {
     expect(verifyRun(store, runId).ok).toBe(true);
   });
 });
+
+describe("Isten-mód (LLM-réteg)", () => {
+  it("mock értelmezés kulcsszavakra, mindig érvényes", async () => {
+    const { VILLAGERS } = await import("@falu/core");
+    const { godSchema, mockGod, validateGod, toGodEvent } = await import("../src/agents/god");
+    const world = createWorld("t", VILLAGERS);
+    const schema = godSchema(world.state.agents.map((a) => a.id), world.map.locations.map((l) => l.id));
+    const cases: [string, string][] = [
+      ["Hatalmas vihar jön", "haza"],
+      ["Egy idegen érkezik a faluba", "idegen"],
+      ["Bál lesz a téren", "gyules"],
+      ["Tűz ütött ki", "keszlet"],
+      ["Valaki kincset talált", "penz"],
+    ];
+    for (const [text, effect] of cases) {
+      const o = mockGod(text, world);
+      expect(schema.safeParse(o).success, text).toBe(true);
+      expect(validateGod(o, world)).toBeUndefined();
+      expect(toGodEvent(o, text).effects.map((e) => e.type), text).toContain(effect);
+    }
+  });
+
+  it("Isten-mód eseménnyel és suttogással is pontosan visszajátszható", async () => {
+    const { VILLAGERS, timeToTick } = await import("@falu/core");
+    const store = new EventStore(":memory:");
+    const runId = store.createRun("t");
+    const gw = new LlmGateway(new MockClient(), MODELS, BUDGET, store, runId);
+    const mind = new LiveMind(gw, { llmAgents: "all", onBudget: "pause" }, store, runId);
+    mind.enqueueGod("Egy idegen érkezik a faluba", timeToTick(1, 10));
+    mind.enqueueGod("Hatalmas vihar jön", timeToTick(1, 15));
+    const runner = new Runner({ world: createWorld("t", VILLAGERS), secondsPerDay: 600, store, runId, inputs: mind });
+    await runner.runTicks(TICKS_PER_DAY / 2);
+    mind.enqueueWhisper("gabor", "Valaki tudja a titkodat.");
+    await runner.runTicks(TICKS_PER_DAY / 2);
+    const types = store.events(runId).map((e) => e.type);
+    expect(types.filter((t) => t === "god_event")).toHaveLength(2);
+    expect(types).toContain("whisper");
+    expect(runner.world.state.agents).toHaveLength(16);
+    expect(verifyRun(store, runId).ok).toBe(true);
+  });
+});

@@ -16,6 +16,8 @@ const INPUT_FIELDS: Record<string, keyof ExternalInputs> = {
   plan: "plans",
   reflection: "reflections",
   conversation: "conversations",
+  god: "god",
+  whisper: "whispers",
 };
 
 /** A rögzített külső bemenetek (döntés, terv, reflexió) tickenként. */

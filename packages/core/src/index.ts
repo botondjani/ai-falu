@@ -14,3 +14,4 @@ export * from "./memory";
 export * from "./seed/villagers";
 export * from "./social";
 export * from "./economy";
+export * from "./god";

@@ -23,6 +23,7 @@ import {
   toConversation,
   validateConversation,
 } from "./conversation";
+import { GOD_STYLE, godSchema, mockGod, toGodEvent, validateGod } from "./god";
 import { decisionSchema, mockDecision, toDesired, validateDecision } from "./decision";
 import { mockPlan, planSchema, toDayPlan } from "./plan";
 import { personaText, planPromptText, reflectionPromptText, situationText, worldRulesText } from "./prompts";
@@ -52,6 +53,18 @@ export const REFLECT_MINUTE = 30;
  */
 export class LiveMind implements InputProvider {
   private recent = new Map<string, SimEvent[]>();
+  private pendingGod: { text: string; atTick?: number }[] = [];
+  private pendingWhispers: { agentId: string; text: string }[] = [];
+  private godSeq = 0;
+
+  /** Isten-mód esemény a következő tickre (vagy egy adott tickre). */
+  enqueueGod(text: string, atTick?: number) {
+    this.pendingGod.push({ text: text.slice(0, 500), atTick });
+  }
+
+  enqueueWhisper(agentId: string, text: string) {
+    this.pendingWhispers.push({ agentId, text: text.slice(0, 300) });
+  }
 
   constructor(
     private gateway: LlmGateway,
@@ -103,6 +116,20 @@ export class LiveMind implements InputProvider {
     const inputs: ExternalInputs = {};
     const planned = new Set<string>();
 
+    // Isten-mód: a beérkezett szövegek értelmezése (strukturált hatásokra) és a suttogások.
+    const due = this.pendingGod.filter((g) => g.atTick === undefined || g.atTick <= state.tick);
+    this.pendingGod = this.pendingGod.filter((g) => !due.includes(g));
+    for (const g of due) {
+      const ev = await this.interpretGod(g.text, world);
+      const key = String(++this.godSeq).padStart(4, "0");
+      (inputs.god ??= {})[key] = ev;
+      this.record(world, "god", key, ev);
+    }
+    for (const w of this.pendingWhispers.splice(0)) {
+      (inputs.whispers ??= {})[w.agentId] = w.text;
+      this.record(world, "whisper", w.agentId, w.text);
+    }
+
     if (t.hour === PLAN_HOUR && t.minute === 0) {
       const res = await this.each(mine, (a) => this.plan(a, world, t.day), () => undefined);
       for (const [a, plan] of res) {
@@ -123,11 +150,11 @@ export class LiveMind implements InputProvider {
     }
 
     // Döntés csak ott kell, ahol nincs érvényes tervelem, vagy valami váratlan történt.
-    const due = mine.filter(
+    const dueAgents = mine.filter(
       (a) => !planned.has(a.id) && needsDecision(a, state) && (a.surprised || !planDesired(a, state)),
     );
-    if (due.length > 0) {
-      const res = await this.each(due, (a) => this.decide(a, world), (a) => fallbackDecision(a, world));
+    if (dueAgents.length > 0) {
+      const res = await this.each(dueAgents, (a) => this.decide(a, world), (a) => fallbackDecision(a, world));
       for (const [a, d] of res) {
         if (!d) continue;
         (inputs.decisions ??= {})[a.id] = d;
@@ -150,6 +177,31 @@ export class LiveMind implements InputProvider {
       }
     }
     return inputs;
+  }
+
+  /** Az Isten-mód szöveg értelmezése; keret vagy hiba esetén a kulcsszavas (mock) értelmezés. */
+  async interpretGod(text: string, world: World) {
+    const schema = godSchema(world.state.agents.map((a) => a.id), world.map.locations.map((l) => l.id));
+    try {
+      const res = await this.gateway.call(
+        {
+          purpose: "god",
+          tick: world.state.tick,
+          tier: "strong",
+          system: [{ text: worldRulesText(world) }, { text: GOD_STYLE, cache: true }],
+          user: `A falu lakói: ${world.state.agents.map((a) => `${a.id}: ${a.name}, ${a.occupation}`).join("; ")}.\n\nAz esemény: ${text}`,
+          schema,
+          maxTokens: 3000,
+          effort: "low",
+          mock: () => mockGod(text, world),
+        },
+        (o) => validateGod(o, world),
+      );
+      if (res.data) return toGodEvent(res.data, text);
+    } catch {
+      // keret: ettől még megtörténik az esemény
+    }
+    return toGodEvent(mockGod(text, world), text);
   }
 
   async converse(aId: string, bId: string, world: World) {

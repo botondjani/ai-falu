@@ -27,6 +27,7 @@ interface CliArgs {
   llmAgents: string;
   villagers: "full" | "demo";
   summary?: number;
+  events: { tick: number; text: string }[];
 }
 
 const HELP = `Használat: npm run sim -- [kapcsolók]
@@ -45,6 +46,7 @@ const HELP = `Használat: npm run sim -- [kapcsolók]
   --llm-agents L    LLM-mel gondolkodó lakók: vesszős lista vagy "all" (alap: all)
   --demo            csak a 3 demó lakó (alap: a teljes, 15 fős falu)
   --summary ID      "Amíg nem néztél oda" összefoglaló egy futásról (--from-day D-től a végéig)
+  --event "N:H:SZ"  Isten-mód esemény N. nap H órakor (többször is megadható)
   -v, --verbose     minden esemény kiírása
 `;
 
@@ -60,6 +62,7 @@ function parseArgs(argv: string[]): CliArgs {
     listRuns: false,
     llmAgents: process.env.SIM_LLM_AGENTS ?? "all",
     villagers: "full",
+    events: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -82,6 +85,11 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === "--llm-agents") args.llmAgents = next();
     else if (a === "--demo") args.villagers = "demo";
     else if (a === "--summary") args.summary = Number(next());
+    else if (a === "--event") {
+      const m = /^(\d+):(\d+):(.+)$/.exec(next());
+      if (!m) throw new Error('--event formátuma: "NAP:ÓRA:szöveg", pl. "2:14:Vihar jön"');
+      args.events.push({ tick: timeToTick(Number(m[1]), Number(m[2])), text: m[3] });
+    }
     else if (a === "--verbose" || a === "-v") args.verbose = true;
     else if (a === "--help" || a === "-h") {
       console.log(HELP);
@@ -164,16 +172,15 @@ async function main() {
   const llmAgents = args.llmAgents === "all" ? ("all" as const) : new Set(args.llmAgents.split(",").filter(Boolean));
   const withLlm = (runId: number) => {
     const gateway = new LlmGateway(client, cfg.models, cfg.budget, store, runId);
-    return {
-      inputs: new LiveMind(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId),
-      llmStats: () => gateway.stats,
-      gateway,
-    };
+    const mind = new LiveMind(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId);
+    for (const e of args.events) mind.enqueueGod(e.text, e.tick);
+    return { inputs: mind, llmStats: () => gateway.stats, gateway, mind };
   };
 
   const villagers = args.villagers === "demo" ? DEMO_VILLAGERS : VILLAGERS;
   let runner: Runner;
   let gateway: LlmGateway;
+  let mind: LiveMind;
   if (args.resume !== undefined) {
     const id = args.resume === "latest" ? store.latestRunId() : args.resume;
     const snap = id !== undefined ? store.loadSnapshot(id) : undefined;
@@ -182,12 +189,14 @@ async function main() {
     store.truncateFrom(id, snap.tick);
     const llm = withLlm(id);
     gateway = llm.gateway;
+    mind = llm.mind;
     runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id, ...llm });
     console.log(`Folytatás: #${id} ${stamp(snap.tick)}-tól`);
   } else {
     const runId = store.createRun(args.seed, { mock: client.mock, villagers: villagers.length, llmAgents: args.llmAgents });
     const llm = withLlm(runId);
     gateway = llm.gateway;
+    mind = llm.mind;
     runner = new Runner({
       world: createWorld(args.seed, villagers),
       secondsPerDay: args.secondsPerDay,
@@ -239,7 +248,10 @@ async function main() {
     return;
   }
 
-  startServer(runner, args.port, new SummaryService(runner, gateway, store, runner.runId));
+  startServer(runner, args.port, new SummaryService(runner, gateway, store, runner.runId), {
+    god: (text) => mind.enqueueGod(text),
+    whisper: (agentId, text) => mind.enqueueWhisper(agentId, text),
+  });
   runner.onTick((r, world) => {
     if (args.verbose) for (const e of r.events) console.log(`[${stamp(e.tick)}] ${describeEvent(e, names(world))}`);
   });

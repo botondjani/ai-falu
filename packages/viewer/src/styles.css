@@ -67,3 +67,9 @@ button, select { background: #2a3240; color: var(--text); border: 1px solid var(
 .hl-n { font-size: 20px; font-weight: bold; color: #f1c40f; width: 22px; }
 .ev-god_event { color: #ffd34d; font-weight: bold; }
 .ev-whisper { color: #c9a0ff; font-style: italic; }
+.god form { display: flex; gap: 6px; margin-bottom: 6px; }
+.god input { flex: 1; min-width: 0; background: #2a3240; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font: inherit; font-size: 12px; }
+.god select { max-width: 120px; }
+.examples { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.examples span { font-size: 10px; background: #2a3240; border-radius: 10px; padding: 2px 8px; cursor: pointer; color: #c8cdd5; }
+.examples span:hover { background: #3a4456; }

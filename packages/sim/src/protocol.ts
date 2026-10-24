@@ -27,6 +27,8 @@ export interface SimStatus {
   speed: number; // valós másodperc / szimulált nap
   pausedReason?: string;
   mode: "élő" | "visszajátszás";
+  /** Elérhető-e az Isten-mód (visszajátszásnál nem). */
+  godMode?: boolean;
   runId?: number;
   llm?: LlmStats;
 }
@@ -67,4 +69,6 @@ export type ClientMessage =
   | { type: "resume" }
   | { type: "speed"; secondsPerDay: number }
   | { type: "summary"; mode: "since_seen" | "last_day" }
-  | { type: "seen" };
+  | { type: "seen" }
+  | { type: "god"; text: string }
+  | { type: "whisper"; agentId: string; text: string };

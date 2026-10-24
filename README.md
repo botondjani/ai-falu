@@ -79,6 +79,14 @@ A lakók rutinját (alvás, evés, munkába járás) a szabály-alapú **autopil
 - Mock módban és hiba esetén sablonos elbeszélés készül ugyanazokból a tényekből. Az összefoglalók gyorsítótárazva vannak.
 - Terminálból: `npm run sim -- --summary 1 --from-day 2`
 
+### Isten-mód
+
+A viewer **⚡ Isten-mód** paneljén:
+- **Esemény bedobása** szövegesen („vihar jön”, „egy idegen érkezik a faluba”, „bál lesz a téren”). Egy Sonnet-hívás lefordítja a szöveget mechanikus hatásokra: hazamenekülés N órára, gyűlés egy helyen, bolti vagy kocsmai készletváltozás, pénz, hangulat, új lakó érkezése (a kocsmában száll meg). Minden érintett fontos emléket kap, ezért a következő döntéseiket az LLM hozza.
+- **Suttogás** egy lakónak: egy gondolat a fejében („Valaki tudja a titkodat.”), ami befolyásolja a döntéseit és a beszélgetéseit.
+- Az értelmezett esemény rögzített bemenet, ezért visszajátszáskor ugyanúgy történik meg. API-kulcs nélkül kulcsszavas értelmezés fut (vihar, idegen, ünnep, tűz, kincs).
+- Terminálból, forgatókönyvként: `npm run sim -- --days 3 --event "1:14:Hatalmas vihar jön" --event "2:10:Egy idegen érkezik"`
+
 Melyik lakó dönt LLM-mel: `--llm-agents joska` (alap), `--llm-agents bela,mari` vagy `--llm-agents all`.
 
 Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_ROUTINE`, `LLM_MODEL_STRONG`, `LLM_MAX_USD_TOTAL` (5), `LLM_MAX_USD_PER_DAY` (2), `LLM_MAX_CALLS_PER_SIM_DAY` (600), `LLM_ON_BUDGET` (`pause`|`autopilot`).
@@ -100,5 +108,5 @@ Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_R
 - [x] 5. Beszélgetések, kapcsolatok, pletyka
 - [x] 6. Gazdaság
 - [x] 7. „Amíg nem néztél oda”
-- [ ] 8. Isten-mód
+- [x] 8. Isten-mód
 - [ ] 9. Kapcsolati gráf, lakóprofil

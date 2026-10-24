@@ -1,6 +1,7 @@
 import { autopilotDecide, needsDecision, planDesired } from "./autopilot";
 import { addMemory, observeEvents, pruneMemories } from "./memory";
 import { applyConversation, initialRelation, relKey } from "./social";
+import { applyGodEvent, applyWhisper } from "./god";
 import { count, remove } from "./inventory";
 import { FOOD, SHOP, TAVERN, buyFromShop, currentPrices, exportSurplus, foodAtHome, initialStocks, mealPrice, ownerOf, workHour } from "./economy";
 import { buildVillageMap } from "./map/village";
@@ -84,7 +85,7 @@ export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Dec
   const events: SimEvent[] = [];
   const moves: Record<string, Point[]> = {};
   const tick = state.tick;
-  const external = inputs.decisions ?? {};
+  const external: Record<string, DesiredActivity> = {};
 
   if (tick % TICKS_PER_DAY === 0) {
     events.push({ tick, type: "day_started", day: tickToTime(tick).day });
@@ -93,12 +94,19 @@ export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Dec
     if (tick > 0) pruneMemories(state);
   }
   applyMindInputs(state, inputs, events);
+  // Isten-mód: az események kényszerített tevékenységei felülírják a többi döntést.
+  for (const key of Object.keys(inputs.god ?? {}).sort()) {
+    Object.assign(external, applyGodEvent(state, map, inputs.god![key], events, spotFor));
+  }
+  for (const id of Object.keys(inputs.whispers ?? {}).sort()) applyWhisper(state, id, inputs.whispers![id], events);
+  for (const [id, d] of Object.entries(inputs.decisions ?? {})) external[id] ??= d;
 
   for (const agent of state.agents) {
     updateNeeds(agent);
 
     const ext = external[agent.id] ?? (needsDecision(agent, state) && !agent.surprised ? planDesired(agent, state) : undefined);
-    if (external[agent.id]) agent.surprised = false;
+    // Csak az LLM saját döntése "dolgozza fel" a meglepetést; a kényszerített (Isten-mód) nem.
+    if (inputs.decisions?.[agent.id] && external[agent.id] === inputs.decisions[agent.id]) agent.surprised = false;
     const desired = ext ? { source: "llm" as const, ...ext } : decide(agent, state, rng);
     const cur = agent.activity;
     if (ext || !cur || cur.kind !== desired.kind || cur.locationId !== desired.locationId) {

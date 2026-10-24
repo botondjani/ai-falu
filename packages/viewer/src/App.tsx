@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeEvent, formatTime, lookupFrom, tickToTime, type DecisionSource } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
-import type { LlmStats, MarketView, Summary } from "@falu/sim";
+import type { AgentView, ClientMessage, LlmStats, MarketView, Summary } from "@falu/sim";
 
 /** Ezek túl gyakoriak a feedhez. */
 const QUIET = new Set(["earned", "produced", "sold", "arrived"]);
@@ -82,6 +82,7 @@ export function App() {
           {state.status?.pausedReason && <div className="paused">Szünetel: {state.status.pausedReason}</div>}
         </section>
 
+        {state.status?.godMode && <GodPanel agents={state.agents} send={send} />}
         <CostPanel llm={state.llm} />
         <MarketPanel market={state.market} />
 
@@ -169,12 +170,13 @@ export function App() {
   );
 }
 
-const SOURCE_ICON: Record<DecisionSource, string> = { llm: "🧠", auto: "⚙", fallback: "⚠", terv: "📋" };
+const SOURCE_ICON: Record<DecisionSource, string> = { llm: "🧠", auto: "⚙", fallback: "⚠", terv: "📋", isten: "⚡" };
 const SOURCE_TITLE: Record<DecisionSource, string> = {
   llm: "LLM döntött",
   auto: "autopilot (szabály)",
   fallback: "LLM-hiba, autopilot-tartalék",
   terv: "a napi terv szerint",
+  isten: "Isten-mód esemény miatt",
 };
 
 function CostPanel({ llm }: { llm: LlmStats | null }) {
@@ -196,6 +198,71 @@ function CostPanel({ llm }: { llm: LlmStats | null }) {
         {llm.failures > 0 && ` · ${llm.failures} hiba, ${llm.fallbacks} tartalék`}
       </div>
       {llm.budgetExceeded && <div className="paused">⛔ {llm.budgetExceeded}</div>}
+    </section>
+  );
+}
+
+const GOD_EXAMPLES = ["Hatalmas vihar jön", "Egy idegen érkezik a faluba", "Bál lesz a téren", "Tűz üt ki a boltban", "Valaki kincset talál a folyóparton"];
+
+function GodPanel({ agents, send }: { agents: AgentView[]; send: (m: ClientMessage) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [target, setTarget] = useState("");
+  const [thought, setThought] = useState("");
+  const [sent, setSent] = useState("");
+  const flash = (m: string) => {
+    setSent(m);
+    setTimeout(() => setSent(""), 3000);
+  };
+  return (
+    <section className="god">
+      <h2 onClick={() => setOpen(!open)} style={{ cursor: "pointer" }}>
+        ⚡ Isten-mód {open ? "▾" : "▸"}
+      </h2>
+      {open && (
+        <>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!text.trim()) return;
+              send({ type: "god", text: text.trim() });
+              flash("Az esemény a következő pillanatban megtörténik…");
+              setText("");
+            }}
+          >
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Mi történjen? pl. vihar jön" maxLength={300} />
+            <button type="submit">Bedob</button>
+          </form>
+          <div className="examples">
+            {GOD_EXAMPLES.map((x) => (
+              <span key={x} onClick={() => setText(x)}>
+                {x}
+              </span>
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!target || !thought.trim()) return;
+              send({ type: "whisper", agentId: target, text: thought.trim() });
+              flash("Elsuttogtad.");
+              setThought("");
+            }}
+          >
+            <select value={target} onChange={(e) => setTarget(e.target.value)}>
+              <option value="">Kinek suttogsz?</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <input value={thought} onChange={(e) => setThought(e.target.value)} placeholder="egy gondolat…" maxLength={300} />
+            <button type="submit">Suttog</button>
+          </form>
+          {sent && <div className="small say">{sent}</div>}
+        </>
+      )}
     </section>
   );
 }

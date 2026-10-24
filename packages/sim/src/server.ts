@@ -4,7 +4,12 @@ import type { SummaryService } from "./summary/service";
 import type { ClientMessage, ServerMessage } from "./protocol";
 
 /** WebSocket-szerver: init üzenet csatlakozáskor, utána tickenként frissítés. */
-export function startServer(runner: Runner, port: number, summaries?: SummaryService): WebSocketServer {
+export interface GodControls {
+  god(text: string): void;
+  whisper(agentId: string, text: string): void;
+}
+
+export function startServer(runner: Runner, port: number, summaries?: SummaryService, god?: GodControls): WebSocketServer {
   const wss = new WebSocketServer({ port });
   const send = (ws: WebSocket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
   const broadcast = (msg: ServerMessage) => {
@@ -36,6 +41,8 @@ export function startServer(runner: Runner, port: number, summaries?: SummarySer
       else if (msg.type === "speed" && msg.secondsPerDay >= 10 && msg.secondsPerDay <= 3600) {
         runner.setSpeed(msg.secondsPerDay);
       } else if (msg.type === "seen") summaries?.markSeen();
+      else if (msg.type === "god" && god && typeof msg.text === "string" && msg.text.trim()) god.god(msg.text.trim());
+      else if (msg.type === "whisper" && god && typeof msg.text === "string" && msg.text.trim()) god.whisper(msg.agentId, msg.text.trim());
       else if (msg.type === "summary" && summaries) {
         try {
           const summary = await summaries.sinceSeen(msg.mode);
