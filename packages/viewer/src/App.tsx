@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeEvent, formatTime, lookupFrom, tickToTime } from "@falu/core";
 import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
+import type { LlmStats } from "@falu/sim";
 
 const SPEEDS = [
   { label: "lassú (20 perc/nap)", value: 1200 },
@@ -16,7 +17,7 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
 
   const onFrame = useCallback((f: TickFrame) => {
-    rendererRef.current?.frame(f.tick, f.tickMs, f.agents, f.moves);
+    rendererRef.current?.frame(f.tick, f.tickMs, f.agents, f.moves, f.events);
   }, []);
   const { state, send } = useSim(onFrame);
 
@@ -74,6 +75,8 @@ export function App() {
           {state.status?.pausedReason && <div className="paused">Szünetel: {state.status.pausedReason}</div>}
         </section>
 
+        <CostPanel llm={state.llm} />
+
         <section>
           <h2>Lakók</h2>
           {state.agents.map((a) => (
@@ -88,8 +91,16 @@ export function App() {
                 <span className="money">{a.money} tallér</span>
               </div>
               <div className="muted small">
-                {a.activity ? `${a.activity.kind} · ${names.place(a.activity.locationId)}` : "—"}
+                {a.activity ? (
+                  <>
+                    <span title={SOURCE_TITLE[a.activity.source]}>{SOURCE_ICON[a.activity.source]}</span> {a.activity.kind} ·{" "}
+                    {names.place(a.activity.locationId)}
+                  </>
+                ) : (
+                  "—"
+                )}
               </div>
+              {a.activity?.say && <div className="say small">„{a.activity.say}”</div>}
               <Bar label="éhség" value={a.needs.hunger} color="#e67e22" />
               <Bar label="energia" value={a.needs.energy} color="#3498db" />
               {selected === a.id && (
@@ -113,6 +124,32 @@ export function App() {
         </section>
       </aside>
     </div>
+  );
+}
+
+const SOURCE_ICON = { llm: "🧠", auto: "⚙", fallback: "⚠" } as const;
+const SOURCE_TITLE = { llm: "LLM döntött", auto: "autopilot (szabály)", fallback: "LLM-hiba, autopilot-tartalék" } as const;
+
+function CostPanel({ llm }: { llm: LlmStats | null }) {
+  if (!llm) return null;
+  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  return (
+    <section className="cost">
+      <h2>LLM költség {llm.mock && <span className="badge">mock</span>}</h2>
+      <div className="cost-main">
+        <b>${llm.usd.toFixed(4)}</b>
+        {llm.mock && <span className="muted small"> (valódi API-val kb. ${llm.estimatedUsd.toFixed(4)})</span>}
+      </div>
+      <div className="small muted">
+        {llm.calls} hívás · ma {llm.callsToday}/{llm.budget.maxCallsPerSimDay} · {fmt(llm.inputTokens)} be / {fmt(llm.outputTokens)} ki /{" "}
+        {fmt(llm.cacheReadTokens)} cache
+      </div>
+      <div className="small muted">
+        keret: ${llm.budget.maxUsdTotal} össz., ${llm.budget.maxUsdPerRealDay}/nap
+        {llm.failures > 0 && ` · ${llm.failures} hiba, ${llm.fallbacks} tartalék`}
+      </div>
+      {llm.budgetExceeded && <div className="paused">⛔ {llm.budgetExceeded}</div>}
+    </section>
   );
 }
 

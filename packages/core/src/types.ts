@@ -10,10 +10,18 @@ export interface Needs {
 
 export type ActivityKind = "alszik" | "dolgozik" | "eszik" | "pihen" | "szórakozik" | "sétál";
 
+/** Ki döntött: szabály-alapú autopilot, LLM, vagy LLM-hiba utáni tartalék. */
+export type DecisionSource = "auto" | "llm" | "fallback";
+
 export interface Activity {
   kind: ActivityKind;
   locationId: string;
   reason: string;
+  source: DecisionSource;
+  /** Eddig a tickig tart a döntés (sürgős szükséglet felülírhatja). */
+  commitUntil?: number;
+  /** Amit hangosan mondott a lakó. */
+  say?: string;
   startedTick: number;
   /** Megérkezett-e már a helyszínre. */
   arrived: boolean;
@@ -65,7 +73,15 @@ interface EventBase {
 export type SimEvent = EventBase &
   (
     | { type: "day_started"; day: number }
-    | { type: "activity_started"; agentId: string; kind: ActivityKind; locationId: string; reason: string }
+    | {
+        type: "activity_started";
+        agentId: string;
+        kind: ActivityKind;
+        locationId: string;
+        reason: string;
+        source: DecisionSource;
+        say?: string;
+      }
     | { type: "arrived"; agentId: string; locationId: string }
     | { type: "ate"; agentId: string; what: string; locationId: string }
     | { type: "produced"; agentId: string; item: Item; qty: number; locationId: string }
@@ -82,4 +98,8 @@ export interface DesiredActivity {
   kind: ActivityKind;
   locationId: string;
   reason: string;
+  source?: DecisionSource;
+  /** Meddig tartson (tick). Csak külső döntésnél. */
+  durationTicks?: number;
+  say?: string;
 }

@@ -45,6 +45,7 @@ export function startServer(runner: Runner, port: number): WebSocketServer {
       agents: runner.agentViews(),
       moves: r.moves,
       events: r.events,
+      llm: runner.llmStats(),
     });
   });
 

@@ -4,17 +4,17 @@ import { verifyRun, worldAt } from "../src/replay";
 import { Runner } from "../src/runner";
 import { EventStore } from "../src/store";
 
-function recordedRun(days: number) {
+async function recordedRun(days: number) {
   const store = new EventStore(":memory:");
   const runId = store.createRun("teszt");
   const runner = new Runner({ world: createWorld("teszt", DEMO_VILLAGERS), secondsPerDay: 600, store, runId });
-  runner.runTicks(days * TICKS_PER_DAY);
+  await runner.runTicks(days * TICKS_PER_DAY);
   return { store, runId, runner };
 }
 
 describe("eseménynapló", () => {
-  it("minden eseményt sorrendben ment, naponta snapshotot készít", () => {
-    const { store, runId } = recordedRun(2);
+  it("minden eseményt sorrendben ment, naponta snapshotot készít", async () => {
+    const { store, runId } = await recordedRun(2);
     const events = store.events(runId);
     expect(events.length).toBeGreaterThan(50);
     for (let i = 1; i < events.length; i++) expect(events[i].tick).toBeGreaterThanOrEqual(events[i - 1].tick);
@@ -22,30 +22,30 @@ describe("eseménynapló", () => {
     expect(store.loadSnapshot(runId, TICKS_PER_DAY + 10)?.tick).toBe(TICKS_PER_DAY);
   });
 
-  it("a visszajátszás pontosan egyezik a naplóval", () => {
-    const { store, runId } = recordedRun(3);
+  it("a visszajátszás pontosan egyezik a naplóval", async () => {
+    const { store, runId } = await recordedRun(3);
     expect(verifyRun(store, runId).ok).toBe(true);
   });
 
-  it("bármely tickre visszaállítható ugyanaz az állapot", () => {
-    const { store, runId } = recordedRun(2);
-    const ref = recordedRun(2);
+  it("bármely tickre visszaállítható ugyanaz az állapot", async () => {
+    const { store, runId } = await recordedRun(2);
+    const ref = await recordedRun(2);
     const target = TICKS_PER_DAY + 137;
     const a = worldAt(store, runId, target);
     const b = createWorld("teszt", DEMO_VILLAGERS);
     const r = new Runner({ world: b, secondsPerDay: 600 });
-    r.runTicks(target);
+    await r.runTicks(target);
     expect(a.state).toEqual(b.state);
     expect(ref.store.events(ref.runId)).toEqual(store.events(runId));
   });
 
-  it("folytatás: a snapshot utáni rész törlődik, újrafuttatva ugyanaz lesz", () => {
-    const { store, runId } = recordedRun(2);
+  it("folytatás: a snapshot utáni rész törlődik, újrafuttatva ugyanaz lesz", async () => {
+    const { store, runId } = await recordedRun(2);
     const before = store.events(runId);
     const snap = store.loadSnapshot(runId, TICKS_PER_DAY + 50)!;
     store.truncateFrom(runId, snap.tick);
     const runner = new Runner({ world: worldAt(store, runId, snap.tick), secondsPerDay: 600, store, runId });
-    runner.runTicks(2 * TICKS_PER_DAY - snap.tick);
+    await runner.runTicks(2 * TICKS_PER_DAY - snap.tick);
     expect(store.events(runId)).toEqual(before);
   });
 });

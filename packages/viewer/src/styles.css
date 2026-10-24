@@ -39,3 +39,6 @@ button, select { background: #2a3240; color: var(--text); border: 1px solid var(
 .ev-day_started { color: #f1c40f; font-weight: bold; }
 .ev-starving { color: #e74c3c; }
 .ev-ate, .ev-paid { color: #d0b0ff; }
+.say { color: #f5e6a8; font-style: italic; margin-top: 2px; }
+.cost-main { font-size: 16px; margin-bottom: 2px; }
+.badge { background: #8e44ad; color: #fff; border-radius: 3px; padding: 0 5px; font-size: 10px; text-transform: none; letter-spacing: 0; }

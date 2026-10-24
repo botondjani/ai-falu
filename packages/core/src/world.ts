@@ -51,7 +51,11 @@ export function restoreWorld(state: WorldState): World {
 }
 
 /** Egy tick előreléptetése. Determinisztikus: ugyanabból az állapotból ugyanaz jön ki. */
-export function stepWorld(world: World, decide: Decider = autopilotDecide): StepResult {
+export function stepWorld(
+  world: World,
+  external: Record<string, DesiredActivity> = {},
+  decide: Decider = autopilotDecide,
+): StepResult {
   const { state, map } = world;
   const rng = new Rng(state.rngState);
   const events: SimEvent[] = [];
@@ -63,9 +67,10 @@ export function stepWorld(world: World, decide: Decider = autopilotDecide): Step
   for (const agent of state.agents) {
     updateNeeds(agent);
 
-    const desired = decide(agent, state, rng);
+    const ext = external[agent.id];
+    const desired = ext ? { source: "llm" as const, ...ext } : decide(agent, state, rng);
     const cur = agent.activity;
-    if (!cur || cur.kind !== desired.kind || cur.locationId !== desired.locationId) {
+    if (ext || !cur || cur.kind !== desired.kind || cur.locationId !== desired.locationId) {
       startActivity(world, agent, desired, events);
     }
 
@@ -96,25 +101,39 @@ function updateNeeds(agent: Agent) {
 }
 
 function startActivity(world: World, agent: Agent, d: DesiredActivity, events: SimEvent[]) {
+  const prev = agent.activity;
   const loc = getLocation(world.map, d.locationId);
   const already = loc.spots.some((s) => s.x === agent.pos.x && s.y === agent.pos.y);
   const target = already ? agent.pos : spotFor(loc.spots, agent.id);
   const path = findPath(world.map, agent.pos, target) ?? [];
   agent.path = path;
+  const tick = world.state.tick;
+  const source = d.source ?? "auto";
   agent.activity = {
     kind: d.kind,
     locationId: d.locationId,
     reason: d.reason,
-    startedTick: world.state.tick,
+    source,
+    commitUntil: d.durationTicks !== undefined ? tick + d.durationTicks : undefined,
+    say: d.say || undefined,
+    startedTick: tick,
     arrived: false,
   };
+  // Ugyanazt folytatja (pl. az LLM a munka folytatását választja): ne induljon újra az út.
+  if (prev?.arrived && prev.kind === d.kind && prev.locationId === d.locationId) {
+    agent.activity.arrived = true;
+    agent.activity.untilTick = prev.untilTick;
+    agent.activity.startedTick = prev.startedTick;
+  }
   events.push({
-    tick: world.state.tick,
+    tick,
     type: "activity_started",
     agentId: agent.id,
     kind: d.kind,
     locationId: d.locationId,
     reason: d.reason,
+    source,
+    ...(d.say ? { say: d.say } : {}),
   });
 }
 

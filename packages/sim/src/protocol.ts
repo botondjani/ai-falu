@@ -1,4 +1,7 @@
-import type { ActivityKind, Inventory, Needs, Point, SimEvent, TileMap } from "@falu/core";
+import type { ActivityKind, DecisionSource, Inventory, Needs, Point, SimEvent, TileMap } from "@falu/core";
+import type { LlmStats } from "./llm/gateway";
+
+export type { LlmStats };
 
 /** A viewernek küldött lakó-nézet (csak ami a megjelenítéshez kell). */
 export interface AgentView {
@@ -7,7 +10,7 @@ export interface AgentView {
   occupation: string;
   color: string;
   pos: Point;
-  activity: { kind: ActivityKind; locationId: string; reason: string } | null;
+  activity: { kind: ActivityKind; locationId: string; reason: string; source: DecisionSource; say?: string } | null;
   needs: Needs;
   money: number;
   inventory: Inventory;
@@ -19,6 +22,7 @@ export interface SimStatus {
   pausedReason?: string;
   mode: "élő" | "visszajátszás";
   runId?: number;
+  llm?: LlmStats;
 }
 
 export type ServerMessage =
@@ -30,6 +34,7 @@ export type ServerMessage =
       agents: AgentView[];
       moves: Record<string, Point[]>;
       events: SimEvent[];
+      llm?: LlmStats;
     }
   | { type: "status"; status: SimStatus };
 

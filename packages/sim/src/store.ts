@@ -2,6 +2,22 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { SimEvent, WorldState } from "@falu/core";
+import type { LlmUsage } from "./llm/types";
+
+export interface LlmCallRecord {
+  tick: number;
+  agentId?: string;
+  purpose: string;
+  model: string;
+  mock: boolean;
+  usage: LlmUsage;
+  costUsd: number;
+  estCostUsd: number;
+  latencyMs: number;
+  ok: boolean;
+  error?: string;
+  response: unknown;
+}
 
 export interface RunInfo {
   id: number;
@@ -65,6 +81,28 @@ export class EventStore {
         payload TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS inputs_run_tick ON inputs(run_id, tick);
+      CREATE TABLE IF NOT EXISTS llm_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER NOT NULL REFERENCES runs(id),
+        tick INTEGER NOT NULL,
+        agent_id TEXT,
+        purpose TEXT NOT NULL,
+        model TEXT NOT NULL,
+        mock INTEGER NOT NULL,
+        input_tokens INTEGER NOT NULL,
+        output_tokens INTEGER NOT NULL,
+        cache_read_tokens INTEGER NOT NULL,
+        cache_write_tokens INTEGER NOT NULL,
+        cost_usd REAL NOT NULL,
+        est_cost_usd REAL NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        ok INTEGER NOT NULL,
+        error TEXT,
+        response TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS llm_calls_run ON llm_calls(run_id, tick);
+      CREATE INDEX IF NOT EXISTS llm_calls_created ON llm_calls(created_at);
     `);
   }
 
@@ -138,11 +176,65 @@ export class EventStore {
     return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
   }
 
+  recordLlmCall(runId: number, c: LlmCallRecord) {
+    this.db
+      .prepare(
+        `INSERT INTO llm_calls (run_id, tick, agent_id, purpose, model, mock, input_tokens, output_tokens,
+           cache_read_tokens, cache_write_tokens, cost_usd, est_cost_usd, latency_ms, ok, error, response)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        runId,
+        c.tick,
+        c.agentId ?? null,
+        c.purpose,
+        c.model,
+        c.mock ? 1 : 0,
+        c.usage.inputTokens,
+        c.usage.outputTokens,
+        c.usage.cacheReadTokens,
+        c.usage.cacheWriteTokens,
+        c.costUsd,
+        c.estCostUsd,
+        c.latencyMs,
+        c.ok ? 1 : 0,
+        c.error ?? null,
+        JSON.stringify(c.response),
+      );
+  }
+
+  /** Egy futás valós LLM-költése ($). */
+  llmSpend(runId: number): number {
+    const r = this.db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS s FROM llm_calls WHERE run_id = ?").get(runId) as { s: number };
+    return r.s;
+  }
+
+  /** A mai (UTC) valós LLM-költés minden futásra együtt ($). */
+  llmSpendToday(): number {
+    const r = this.db
+      .prepare("SELECT COALESCE(SUM(cost_usd), 0) AS s FROM llm_calls WHERE date(created_at) = date('now')")
+      .get() as { s: number };
+    return r.s;
+  }
+
+  /** Külső bemenetek tickenként csoportosítva (visszajátszáshoz). */
+  inputsByTick(runId: number, kind: string): Map<number, Record<string, unknown>> {
+    const m = new Map<number, Record<string, unknown>>();
+    for (const i of this.inputs(runId)) {
+      if (i.kind !== kind) continue;
+      const rec = m.get(i.tick) ?? {};
+      rec[i.key] = i.payload;
+      m.set(i.tick, rec);
+    }
+    return m;
+  }
+
   /** Folytatáskor a snapshot utáni (újra lefutó) részt töröljük, hogy ne duplikálódjon. */
   truncateFrom(runId: number, tick: number) {
     this.db.transaction(() => {
       this.db.prepare("DELETE FROM events WHERE run_id = ? AND tick >= ?").run(runId, tick);
       this.db.prepare("DELETE FROM snapshots WHERE run_id = ? AND tick > ?").run(runId, tick);
+      this.db.prepare("DELETE FROM inputs WHERE run_id = ? AND tick >= ?").run(runId, tick);
     })();
   }
 

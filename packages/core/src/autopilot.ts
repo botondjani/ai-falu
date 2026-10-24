@@ -35,6 +35,9 @@ export function autopilotDecide(agent: Agent, state: WorldState, rng: Rng): Desi
     // nincs étel és pénz: dolgozik tovább, hátha keres valamit
   }
 
+  // Külső (LLM) döntés: amíg tart, tiszteletben tartjuk.
+  if (cur?.commitUntil !== undefined && state.tick < cur.commitUntil) return keep(cur);
+
   if (hourBetween(hour, RULES.workStartHour, RULES.workEndHour)) {
     return { kind: "dolgozik", locationId: agent.workplaceId, reason: "munkaidő" };
   }
@@ -52,4 +55,19 @@ export function autopilotDecide(agent: Agent, state: WorldState, rng: Rng): Desi
 
 function keep(a: { kind: DesiredActivity["kind"]; locationId: string; reason: string }): DesiredActivity {
   return { kind: a.kind, locationId: a.locationId, reason: a.reason };
+}
+
+/**
+ * Döntési pont: igaz, ha a lakó szabad, nincs sürgős szükséglete, és nincs futó döntése.
+ * Ilyenkor kérdezhetjük az LLM-et; minden más helyzetet az autopilot visz.
+ */
+export function needsDecision(agent: Agent, state: WorldState): boolean {
+  const { hour } = tickToTime(state.tick);
+  if (hourBetween(hour, RULES.sleepHour, RULES.wakeHour)) return false;
+  if (agent.needs.hunger >= RULES.hungryThreshold || agent.needs.energy < RULES.exhaustedThreshold) return false;
+  const cur = agent.activity;
+  if (!cur) return true;
+  if (cur.kind === "eszik") return false;
+  if (cur.kind === "alszik" && cur.source === "auto" && agent.needs.energy < 60) return false;
+  return cur.commitUntil === undefined || state.tick >= cur.commitUntil;
 }

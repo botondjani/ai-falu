@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text, Texture, TextureStyle } from "pixi.js";
-import { tickToTime, type Point, type TileMap } from "@falu/core";
+import { tickToTime, type Point, type SimEvent, type TileMap } from "@falu/core";
 import type { AgentView } from "@falu/sim";
 import { TILE, renderAgentCanvas, renderMapCanvas } from "./tiles";
 
@@ -7,6 +7,8 @@ TextureStyle.defaultOptions.scaleMode = "nearest";
 
 interface AgentSprite {
   root: Container;
+  bubble: Container;
+  bubbleUntil: number;
   /** Az aktuális animáció útvonala csempékben: [kiindulás, ...lépések]. */
   route: Point[];
   t0: number;
@@ -17,7 +19,7 @@ interface AgentSprite {
 export class VillageRenderer {
   private app = new Application();
   private world = new Container();
-  private agentLayer = new Container();
+  private agentLayer = new Container({ sortableChildren: true });
   private night = new Graphics();
   private sprites = new Map<string, AgentSprite>();
   private map: TileMap | null = null;
@@ -77,7 +79,7 @@ export class VillageRenderer {
     );
   }
 
-  async frame(tick: number, tickMs: number, agents: AgentView[], moves: Record<string, Point[]>) {
+  async frame(tick: number, tickMs: number, agents: AgentView[], moves: Record<string, Point[]>, events: SimEvent[] = []) {
     await this.ready;
     if (this.destroyed) return;
     const now = performance.now();
@@ -96,6 +98,31 @@ export class VillageRenderer {
       s.dur = dur;
     }
     this.night.alpha = nightAlpha(tick);
+    for (const e of events) {
+      if (e.type === "activity_started" && e.say) {
+        const s = this.sprites.get(e.agentId);
+        if (s) this.showBubble(s, e.say, now);
+      }
+    }
+  }
+
+  private showBubble(s: AgentSprite, text: string, now: number) {
+    s.bubble.removeChildren();
+    const label = new Text({
+      text,
+      style: { fontFamily: "monospace", fontSize: 6, fill: "#222", wordWrap: true, wordWrapWidth: 90 },
+      resolution: 4,
+    });
+    const pad = 3;
+    const bg = new Graphics()
+      .roundRect(-pad, -pad, label.width + pad * 2, label.height + pad * 2, 3)
+      .fill({ color: "#ffffff", alpha: 0.92 })
+      .stroke({ color: "#333", width: 0.5 });
+    const tail = new Graphics().poly([4, label.height + pad, 9, label.height + pad, 5, label.height + pad + 4]).fill("#ffffff");
+    s.bubble.addChild(bg, tail, label);
+    s.bubble.position.set(-6, -16 - label.height - pad);
+    s.bubble.visible = true;
+    s.bubbleUntil = now + 5000;
   }
 
   private createSprite(a: AgentView): AgentSprite {
@@ -109,12 +136,14 @@ export class VillageRenderer {
     });
     label.anchor.set(0.5, 1);
     label.y = -7;
-    root.addChild(body, label);
+    const bubble = new Container();
+    bubble.visible = false;
+    root.addChild(body, label, bubble);
     root.eventMode = "static";
     root.cursor = "pointer";
     root.on("pointertap", () => this.onAgentClick?.(a.id));
     this.agentLayer.addChild(root);
-    const s: AgentSprite = { root, route: [a.pos], t0: 0, dur: 1 };
+    const s: AgentSprite = { root, bubble, bubbleUntil: 0, route: [a.pos], t0: 0, dur: 1 };
     this.place(s, a.pos);
     return s;
   }
@@ -134,7 +163,12 @@ export class VillageRenderer {
 
   private animate() {
     const now = performance.now();
-    for (const s of this.sprites.values()) this.place(s, this.currentPos(s, now));
+    for (const s of this.sprites.values()) {
+      this.place(s, this.currentPos(s, now));
+      if (s.bubble.visible && now > s.bubbleUntil) s.bubble.visible = false;
+      // a beszélő kerüljön felülre
+      s.root.zIndex = s.bubble.visible ? 1 : 0;
+    }
   }
 
   destroy() {

@@ -1,5 +1,10 @@
 import { DEMO_VILLAGERS, TICKS_PER_DAY, createWorld, describeEvent, lookupFrom, stamp, timeToTick, type World } from "@falu/core";
-import { verifyRun, worldAt } from "./replay";
+import { LiveDecisions, ReplayDecisions } from "./agents/decision";
+import { llmConfig, loadDotEnv } from "./config";
+import { AnthropicClient } from "./llm/anthropic";
+import { LlmGateway } from "./llm/gateway";
+import { MockClient } from "./llm/mock";
+import { recordedDecisions, verifyRun, worldAt } from "./replay";
 import { Runner } from "./runner";
 import { startServer } from "./server";
 import { EventStore } from "./store";
@@ -17,6 +22,7 @@ interface CliArgs {
   fromDay: number;
   verify?: number;
   listRuns: boolean;
+  llmAgents: string;
 }
 
 const HELP = `Használat: npm run sim -- [kapcsolók]
@@ -32,6 +38,7 @@ const HELP = `Használat: npm run sim -- [kapcsolók]
   --from-day D      visszajátszás kezdőnapja (alap: 1)
   --verify ID       determinizmus-ellenőrzés: újraszimulál és összeveti a naplóval
   --list-runs       futások listája
+  --llm-agents L    LLM-mel döntő lakók: vesszős lista vagy "all" (alap: joska)
   -v, --verbose     minden esemény kiírása
 `;
 
@@ -45,6 +52,7 @@ function parseArgs(argv: string[]): CliArgs {
     db: process.env.SIM_DB ?? "data/falu.db",
     fromDay: 1,
     listRuns: false,
+    llmAgents: process.env.SIM_LLM_AGENTS ?? "joska",
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -64,6 +72,7 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === "--from-day") args.fromDay = Number(next());
     else if (a === "--verify") args.verify = Number(next());
     else if (a === "--list-runs") args.listRuns = true;
+    else if (a === "--llm-agents") args.llmAgents = next();
     else if (a === "--verbose" || a === "-v") args.verbose = true;
     else if (a === "--help" || a === "-h") {
       console.log(HELP);
@@ -71,13 +80,17 @@ function parseArgs(argv: string[]): CliArgs {
     } else throw new Error(`Ismeretlen kapcsoló: ${a}\n\n${HELP}`);
   }
   // API-kulcs nélkül mindig mock mód: a falu így is teljesen működik (autopilot + mock LLM).
-  if (!process.env.ANTHROPIC_API_KEY) args.mock = true;
+  if (!process.env.ANTHROPIC_API_KEY && !args.mock) {
+    console.log("Nincs ANTHROPIC_API_KEY – mock módban fut (költség nélkül).");
+    args.mock = true;
+  }
   return args;
 }
 
 const names = (w: World) => lookupFrom(w.state.agents, w.map.locations);
 
-function main() {
+async function main() {
+  loadDotEnv();
   const args = parseArgs(process.argv.slice(2));
   const store = new EventStore(args.db);
 
@@ -112,12 +125,24 @@ function main() {
       runId: run.id,
       mode: "visszajátszás",
       stopAtTick: run.lastTick + 1,
+      decisions: new ReplayDecisions(recordedDecisions(store, run.id)),
     });
     startServer(runner, args.port);
     runner.start();
     console.log(`Visszajátszás: #${run.id} ${stamp(fromTick)} → ${stamp(run.lastTick)}  ws://localhost:${args.port}`);
     return;
   }
+
+  const cfg = llmConfig();
+  const client = args.mock || !cfg.apiKey ? new MockClient() : new AnthropicClient(cfg.apiKey);
+  const llmAgents = args.llmAgents === "all" ? ("all" as const) : new Set(args.llmAgents.split(",").filter(Boolean));
+  const withLlm = (runId: number) => {
+    const gateway = new LlmGateway(client, cfg.models, cfg.budget, store, runId);
+    return {
+      decisions: new LiveDecisions(gateway, { llmAgents, onBudget: cfg.onBudget }, store, runId),
+      llmStats: () => gateway.stats,
+    };
+  };
 
   let runner: Runner;
   if (args.resume !== undefined) {
@@ -126,11 +151,17 @@ function main() {
     if (id === undefined || !snap) throw new Error("Nincs folytatható futás");
     // A snapshot utáni naplót eldobjuk; determinisztikusan újra keletkezik.
     store.truncateFrom(id, snap.tick);
-    runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id });
+    runner = new Runner({ world: worldAt(store, id, snap.tick), secondsPerDay: args.secondsPerDay, store, runId: id, ...withLlm(id) });
     console.log(`Folytatás: #${id} ${stamp(snap.tick)}-tól`);
   } else {
-    const runId = store.createRun(args.seed, { mock: args.mock, villagers: DEMO_VILLAGERS.length });
-    runner = new Runner({ world: createWorld(args.seed, DEMO_VILLAGERS), secondsPerDay: args.secondsPerDay, store, runId });
+    const runId = store.createRun(args.seed, { mock: client.mock, villagers: DEMO_VILLAGERS.length, llmAgents: args.llmAgents });
+    runner = new Runner({
+      world: createWorld(args.seed, DEMO_VILLAGERS),
+      secondsPerDay: args.secondsPerDay,
+      store,
+      runId,
+      ...withLlm(runId),
+    });
   }
 
   const shutdown = () => {
@@ -152,13 +183,22 @@ function main() {
       }
     });
     const t0 = Date.now();
-    runner.runTicks(args.days * TICKS_PER_DAY);
+    await runner.runTicks(args.days * TICKS_PER_DAY);
     runner.flush();
-    console.log(`\nKész: #${runner.runId}, ${args.days} nap, ${runner.world.state.tick} tick, ${Date.now() - t0} ms  (${args.mock ? "mock" : "LLM"} mód)`);
+    if (runner.pausedReason) console.log(`\nLeállt: ${runner.pausedReason}`);
+    console.log(`\nKész: #${runner.runId}, ${args.days} nap, ${runner.world.state.tick} tick, ${Date.now() - t0} ms  (${client.mock ? "mock" : "LLM"} mód)`);
     console.log("Események:", counts);
     for (const a of runner.world.state.agents) {
       console.log(
         `  ${a.name.padEnd(14)} pénz: ${String(a.money).padStart(4)}  éhség: ${a.needs.hunger.toFixed(0).padStart(3)}  energia: ${a.needs.energy.toFixed(0).padStart(3)}  készlet: ${JSON.stringify(a.inventory)}`,
+      );
+    }
+    const st = runner.llmStats();
+    if (st) {
+      console.log(
+        `LLM: ${st.calls} hívás (${st.failures} sikertelen, ${st.fallbacks} autopilot-tartalék), ` +
+          `${st.inputTokens} be / ${st.outputTokens} ki / ${st.cacheReadTokens} cache token, ` +
+          (st.mock ? `mock – valódi API-val kb. $${st.estimatedUsd.toFixed(4)}` : `$${st.usd.toFixed(4)}`),
       );
     }
     console.log(`Napló: ${args.db}  (visszajátszás: npm run sim -- --replay ${runner.runId})`);
@@ -172,8 +212,11 @@ function main() {
   });
   runner.start();
   console.log(
-    `Falu szimuláció #${runner.runId} fut: ws://localhost:${args.port}  (1 nap = ${args.secondsPerDay} mp, ${args.mock ? "mock" : "LLM"} mód)`,
+    `Falu szimuláció #${runner.runId} fut: ws://localhost:${args.port}  (1 nap = ${args.secondsPerDay} mp, ${client.mock ? "mock" : "LLM"} mód)`,
   );
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

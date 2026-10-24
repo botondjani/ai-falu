@@ -1,4 +1,4 @@
-import { restoreWorld, stepWorld, type SimEvent, type World } from "@falu/core";
+import { restoreWorld, stepWorld, type DesiredActivity, type SimEvent, type World } from "@falu/core";
 import type { EventStore } from "./store";
 
 /** Világ a futás `fromTick` előtti legutóbbi snapshotjából, odaléptetve `fromTick`-ig. */
@@ -6,8 +6,14 @@ export function worldAt(store: EventStore, runId: number, fromTick: number): Wor
   const snap = store.loadSnapshot(runId, fromTick);
   if (!snap) throw new Error(`Nincs snapshot a(z) ${runId}. futáshoz`);
   const world = restoreWorld(snap);
-  while (world.state.tick < fromTick) stepWorld(world);
+  const decisions = recordedDecisions(store, runId);
+  while (world.state.tick < fromTick) stepWorld(world, decisions.get(world.state.tick) ?? {});
   return world;
+}
+
+/** A rögzített LLM-döntések tickenként. */
+export function recordedDecisions(store: EventStore, runId: number): Map<number, Record<string, DesiredActivity>> {
+  return store.inputsByTick(runId, "decision") as Map<number, Record<string, DesiredActivity>>;
 }
 
 export interface VerifyResult {
@@ -28,7 +34,8 @@ export function verifyRun(store: EventStore, runId: number): VerifyResult {
   const world = worldAt(store, runId, 0);
   const actual: SimEvent[] = [];
   const endTick = run.lastTick + 1;
-  while (world.state.tick < endTick) actual.push(...stepWorld(world).events);
+  const decisions = recordedDecisions(store, runId);
+  while (world.state.tick < endTick) actual.push(...stepWorld(world, decisions.get(world.state.tick) ?? {}).events);
   const n = Math.max(logged.length, actual.length);
   for (let i = 0; i < n; i++) {
     if (JSON.stringify(logged[i]) !== JSON.stringify(actual[i])) {

@@ -22,7 +22,7 @@ export function describeEvent(e: SimEvent, n: NameLookup): string {
     case "day_started":
       return `── ${e.day}. nap ──`;
     case "activity_started":
-      return `${n.agent(e.agentId)}: ${e.kind} (${n.place(e.locationId)}) – ${e.reason}`;
+      return `${n.agent(e.agentId)}: ${e.kind} (${n.place(e.locationId)}) – ${e.reason}${e.say ? ` – „${e.say}”` : ""}`;
     case "arrived":
       return `${n.agent(e.agentId)} megérkezett: ${n.place(e.locationId)}`;
     case "ate":
