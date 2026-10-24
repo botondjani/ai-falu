@@ -1,4 +1,4 @@
-import { TICKS_PER_DAY, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
+import { TICKS_PER_DAY, knownGossip, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
 import type { InputProvider } from "./agents/mind";
 import { BudgetExceededError, type LlmStats } from "./llm/gateway";
 import type { AgentView, SimStatus } from "./protocol";
@@ -174,7 +174,8 @@ export class Runner {
   }
 
   agentViews(): AgentView[] {
-    return this.world.state.agents.map((a) => ({
+    const st = this.world.state;
+    return st.agents.map((a) => ({
       id: a.id,
       name: a.name,
       occupation: a.occupation,
@@ -194,6 +195,10 @@ export class Runner {
       inventory: a.inventory,
       mood: a.mood,
       planGoal: a.plan?.goal,
+      relations: Object.entries(st.relations)
+        .filter(([k, r]) => k.startsWith(`${a.id}>`) && (r.trust !== 0 || r.liking !== 0))
+        .map(([k, r]) => ({ with: k.slice(a.id.length + 1), ...r })),
+      knownGossip: knownGossip(st, a.id).length,
     }));
   }
 }

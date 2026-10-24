@@ -1,6 +1,7 @@
 import type { Inventory, Item } from "./inventory";
 import type { Point } from "./map/types";
 import type { DayPlan, Memory } from "./memory";
+import type { Conversation, ConversationLine, Gossip, Relation } from "./social";
 
 export interface Needs {
   /** 0 = jóllakott, 100 = éhezik */
@@ -61,6 +62,7 @@ export interface Agent extends VillagerSeed {
   plan?: DayPlan;
   /** Történt-e valami váratlan (fontos emlék) az utolsó LLM-döntés óta. */
   surprised: boolean;
+  lastTalkTick?: number;
 }
 
 export interface WorldState {
@@ -72,6 +74,12 @@ export interface WorldState {
   stocks: Record<string, Inventory>;
   memories: Memory[];
   nextMemoryId: number;
+  /** "a>b" → A véleménye B-ről */
+  relations: Record<string, Relation>;
+  /** "a|b" → utolsó beszélgetés tickje */
+  lastTalk: Record<string, number>;
+  gossip: Gossip[];
+  nextGossipId: number;
 }
 
 export interface Reflection {
@@ -84,6 +92,8 @@ export interface ExternalInputs {
   decisions?: Record<string, DesiredActivity>;
   plans?: Record<string, DayPlan>;
   reflections?: Record<string, Reflection>;
+  /** kulcs: "a|b" */
+  conversations?: Record<string, Conversation>;
 }
 
 interface EventBase {
@@ -110,6 +120,16 @@ export type SimEvent = EventBase &
     | { type: "took"; agentId: string; item: Item; qty: number; from: string }
     | { type: "starving"; agentId: string }
     | { type: "planned"; agentId: string; goal: string; items: number }
+    | { type: "conversation"; agentId: string; a: string; b: string; topic: string; lines: ConversationLine[] }
+    | {
+        type: "gossip";
+        agentId: string;
+        listenerId: string;
+        aboutId: string;
+        gossipId: number;
+        text: string;
+        fresh: boolean;
+      }
     | { type: "reflected"; agentId: string; insights: string[]; mood: string }
   );
 

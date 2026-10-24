@@ -77,8 +77,8 @@ export function App() {
 
         <CostPanel llm={state.llm} />
 
-        <section>
-          <h2>Lakók</h2>
+        <section className="agents">
+          <h2>Lakók ({state.agents.length})</h2>
           {state.agents.map((a) => (
             <div
               key={a.id}
@@ -101,19 +101,37 @@ export function App() {
                 )}
               </div>
               {a.activity?.say && <div className="say small">„{a.activity.say}”</div>}
-              {(a.mood || a.planGoal) && (
+              {selected === a.id && (a.mood || a.planGoal) && (
                 <div className="small muted">
                   {a.mood && <>hangulat: {a.mood}</>}
                   {a.mood && a.planGoal && " · "}
                   {a.planGoal && <>cél: {a.planGoal}</>}
                 </div>
               )}
-              <Bar label="éhség" value={a.needs.hunger} color="#e67e22" />
-              <Bar label="energia" value={a.needs.energy} color="#3498db" />
+              {selected === a.id && (
+                <>
+                  <Bar label="éhség" value={a.needs.hunger} color="#e67e22" />
+                  <Bar label="energia" value={a.needs.energy} color="#3498db" />
+                </>
+              )}
               {selected === a.id && (
                 <div className="small detail">
                   <div>Miért: {a.activity?.reason ?? "—"}</div>
                   <div>Készlet: {Object.entries(a.inventory).map(([k, v]) => `${k} ×${v}`).join(", ") || "üres"}</div>
+                  <div>Ismert pletykák: {a.knownGossip}</div>
+                  {a.relations.length > 0 && (
+                    <div className="rels">
+                      {[...a.relations]
+                        .sort((x, y) => Math.abs(y.liking) + Math.abs(y.trust) - Math.abs(x.liking) - Math.abs(x.trust))
+                        .slice(0, 6)
+                        .map((r) => (
+                          <div key={r.with}>
+                            {names.agent(r.with)}: <span className={r.liking >= 0 ? "pos" : "neg"}>szimpátia {r.liking}</span>,{" "}
+                            <span className={r.trust >= 0 ? "pos" : "neg"}>bizalom {r.trust}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -126,6 +144,15 @@ export function App() {
             <div key={`${e.tick}-${i}`} className={`ev ev-${e.type}`}>
               <span className="muted">{String(tickToTime(e.tick).hour).padStart(2, "0")}:{String(tickToTime(e.tick).minute).padStart(2, "0")}</span>{" "}
               {describeEvent(e, names)}
+              {e.type === "conversation" && (
+                <div className="dialog">
+                  {e.lines.map((l, j) => (
+                    <div key={j}>
+                      <b>{names.agent(l.speaker).split(" ").at(-1)}:</b> {l.text}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </section>

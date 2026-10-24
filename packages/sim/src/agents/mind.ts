@@ -2,6 +2,8 @@ import {
   Rng,
   TICKS_PER_HOUR,
   autopilotDecide,
+  conversationCandidates,
+  pairKey,
   needsDecision,
   planDesired,
   tickToTime,
@@ -14,6 +16,13 @@ import {
 } from "@falu/core";
 import { BudgetExceededError, type LlmGateway } from "../llm/gateway";
 import type { EventStore } from "../store";
+import {
+  conversationPromptText,
+  conversationSchema,
+  mockConversation,
+  toConversation,
+  validateConversation,
+} from "./conversation";
 import { decisionSchema, mockDecision, toDesired, validateDecision } from "./decision";
 import { mockPlan, planSchema, toDayPlan } from "./plan";
 import { personaText, planPromptText, reflectionPromptText, situationText, worldRulesText } from "./prompts";
@@ -70,7 +79,7 @@ export class LiveMind implements InputProvider {
   }
 
   /** Párhuzamosan futtat lakónkénti feladatokat; keretnél szünet vagy tartalék. */
-  private async each<T>(agents: Agent[], fn: (a: Agent) => Promise<T>, fallback: (a: Agent) => T | undefined) {
+  private async each<I, T>(agents: I[], fn: (a: I) => Promise<T>, fallback: (a: I) => T | undefined) {
     let budgetHit: string | undefined;
     const results = await Promise.all(
       agents.map(async (a) => {
@@ -125,7 +134,44 @@ export class LiveMind implements InputProvider {
         this.record(world, "decision", a.id, d);
       }
     }
+    // Beszélgetések a ráérő, egy helyen lévő párok között.
+    const pairs = conversationCandidates(state, world.map).filter(([a, b]) => {
+      const A = state.agents.find((x) => x.id === a)!;
+      const B = state.agents.find((x) => x.id === b)!;
+      return this.enabled(A) || this.enabled(B);
+    });
+    if (pairs.length > 0) {
+      const res = await this.each(pairs, ([a, b]) => this.converse(a, b, world), () => undefined);
+      for (const [[a, b], conv] of res) {
+        if (!conv) continue;
+        const key = pairKey(a, b);
+        (inputs.conversations ??= {})[key] = conv;
+        this.record(world, "conversation", key, conv);
+      }
+    }
     return inputs;
+  }
+
+  async converse(aId: string, bId: string, world: World) {
+    const a = world.state.agents.find((x) => x.id === aId)!;
+    const b = world.state.agents.find((x) => x.id === bId)!;
+    const schema = conversationSchema(a, b, world.state.agents.map((x) => x.id));
+    const res = await this.gateway.call(
+      {
+        purpose: "conversation",
+        tick: world.state.tick,
+        agentId: a.id,
+        tier: "routine",
+        system: [{ text: worldRulesText(world), cache: true }],
+        user: conversationPromptText(a, b, world),
+        schema,
+        maxTokens: 3000,
+        effort: "low",
+        mock: () => mockConversation(a, b, world),
+      },
+      (o) => validateConversation(o, a, b, world),
+    );
+    return res.data ? toConversation(res.data, a, b) : undefined;
   }
 
   private system(agent: Agent, world: World) {

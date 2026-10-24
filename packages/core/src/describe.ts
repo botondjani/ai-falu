@@ -39,6 +39,10 @@ export function describeEvent(e: SimEvent, n: NameLookup): string {
       return `${n.agent(e.agentId)} nagyon éhes!`;
     case "planned":
       return `${n.agent(e.agentId)} mai célja: ${e.goal}`;
+    case "conversation":
+      return `${n.agent(e.a)} és ${n.agent(e.b)} beszélgetett (${e.topic})`;
+    case "gossip":
+      return `${n.agent(e.agentId)} pletykált ${n.agent(e.listenerId)} fülébe ${n.agent(e.aboutId)} kapcsán: „${e.text}”`;
     case "reflected":
       return `${n.agent(e.agentId)} elgondolkodott (${e.mood}): ${e.insights.join(" ")}`;
   }

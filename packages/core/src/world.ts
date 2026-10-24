@@ -1,5 +1,6 @@
 import { autopilotDecide, needsDecision, planDesired } from "./autopilot";
 import { addMemory, observeEvents, pruneMemories } from "./memory";
+import { applyConversation, initialRelation, relKey } from "./social";
 import { add, count, remove, transfer } from "./inventory";
 import { buildVillageMap } from "./map/village";
 import { getLocation, type Point, type TileMap } from "./map/types";
@@ -44,12 +45,26 @@ export function createWorld(seed: string, villagers: VillagerSeed[]): World {
     .sort((a, b) => a.id.localeCompare(b.id));
   const stocks: WorldState["stocks"] = {};
   for (const loc of map.locations) stocks[loc.id] = {};
-  const state: WorldState = { seed, tick: 0, rngState: Rng.fromSeed(seed).state, agents, stocks, memories: [], nextMemoryId: 1 };
-  // Kezdő emlékek a kapcsolatokból.
+  const state: WorldState = {
+    seed,
+    tick: 0,
+    rngState: Rng.fromSeed(seed).state,
+    agents,
+    stocks,
+    memories: [],
+    nextMemoryId: 1,
+    relations: {},
+    lastTalk: {},
+    gossip: [],
+    nextGossipId: 1,
+  };
+  // Kezdő emlékek és vélemények a kapcsolatokból.
   for (const a of agents) {
     for (const r of a.relationships ?? []) {
       const other = agents.find((o) => o.id === r.with);
-      if (other) addMemory(state, a.id, "reflexió", `${other.name}: ${r.kind}.`, 6, 0);
+      if (!other) continue;
+      addMemory(state, a.id, "reflexió", `${other.name}: ${r.kind}.`, 6, 0);
+      state.relations[relKey(a.id, other.id)] = initialRelation(r.kind);
     }
   }
   return { map, state };
@@ -109,6 +124,9 @@ export function stepWorld(world: World, inputs: ExternalInputs = {}, decide: Dec
 /** Napi terv és esti reflexió beépítése (külső, rögzített bemenetből). */
 function applyMindInputs(state: WorldState, inputs: ExternalInputs, events: SimEvent[]) {
   const tick = state.tick;
+  for (const key of Object.keys(inputs.conversations ?? {}).sort()) {
+    applyConversation(state, inputs.conversations![key], events);
+  }
   for (const agent of state.agents) {
     const plan = inputs.plans?.[agent.id];
     if (plan) {

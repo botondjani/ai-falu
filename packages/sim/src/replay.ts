@@ -11,7 +11,12 @@ export function worldAt(store: EventStore, runId: number, fromTick: number): Wor
   return world;
 }
 
-const INPUT_FIELDS: Record<string, keyof ExternalInputs> = { decision: "decisions", plan: "plans", reflection: "reflections" };
+const INPUT_FIELDS: Record<string, keyof ExternalInputs> = {
+  decision: "decisions",
+  plan: "plans",
+  reflection: "reflections",
+  conversation: "conversations",
+};
 
 /** A rögzített külső bemenetek (döntés, terv, reflexió) tickenként. */
 export function recordedInputs(store: EventStore, runId: number): Map<number, ExternalInputs> {

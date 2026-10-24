@@ -44,3 +44,11 @@ button, select { background: #2a3240; color: var(--text); border: 1px solid var(
 .badge { background: #8e44ad; color: #fff; border-radius: 3px; padding: 0 5px; font-size: 10px; text-transform: none; letter-spacing: 0; }
 .ev-planned { color: #7fd3a8; }
 .ev-reflected { color: #8fc1ff; font-style: italic; }
+.ev-conversation { color: #ffd7a8; }
+.ev-gossip { color: #ff9ecb; }
+.dialog { margin: 2px 0 4px 10px; padding-left: 6px; border-left: 2px solid #4a5468; color: #c8cdd5; }
+.rels { margin-top: 4px; }
+.pos { color: #6fcf97; }
+.neg { color: #eb7a7a; }
+.agents { max-height: 38vh; overflow-y: auto; flex-shrink: 0; }
+.feed { min-height: 120px; }

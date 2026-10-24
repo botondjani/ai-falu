@@ -56,6 +56,13 @@ A lakók rutinját (alvás, evés, munkába járás) a szabály-alapú **autopil
 - **Váratlan helyzet**: egy fontos (≥5) új emlék után a következő döntést újra az LLM hozza.
 - **Esti reflexió** (21:30, Sonnet): 1–3 magasabb szintű tanulság fontossággal („Béla nem megbízható”) és hangulat.
 
+### Beszélgetés, kapcsolatok, pletyka
+
+- Ha két ráérő lakó (pihen, szórakozik, sétál) ugyanott van, kis eséllyel beszélgetni kezdenek: a kocsmában és a téren gyakrabban, mint máshol. Párokra 3 órás, lakóra 1 órás cooldown van. A jelölteket determinisztikusan választjuk (seed + tick).
+- Egy beszélgetés **egy** Haiku-hívás: 4–6 replika felváltva, mindkét fél emléke, véleményváltozás (bizalom, szimpátia; legfeljebb ±15) és opcionálisan pletyka egy harmadik lakóról.
+- **Kapcsolatok:** irányított vélemények (A → B) -100..100 között, kezdetben a seed-kapcsolatokból.
+- **Pletyka:** azonosítóval terjed. Aki hallja, emléket kap (fontosság 5, ezért a következő döntését az LLM hozza), és romlik vagy javul a véleménye az alanyról. Csak az a pletyka adható tovább, amit a mondó tényleg ismer.
+
 Melyik lakó dönt LLM-mel: `--llm-agents joska` (alap), `--llm-agents bela,mari` vagy `--llm-agents all`.
 
 Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_ROUTINE`, `LLM_MODEL_STRONG`, `LLM_MAX_USD_TOTAL` (5), `LLM_MAX_USD_PER_DAY` (2), `LLM_MAX_CALLS_PER_SIM_DAY` (600), `LLM_ON_BUDGET` (`pause`|`autopilot`).
@@ -74,7 +81,7 @@ Konfiguráció (`.env`, lásd `.env.example`): `ANTHROPIC_API_KEY`, `LLM_MODEL_R
 - [x] 2. SQLite eseménynapló, visszajátszás
 - [x] 3. LLM-döntés, mock mód, költségszámláló
 - [x] 4. Memória, reflexió, napi terv
-- [ ] 5. Beszélgetések, kapcsolatok, pletyka
+- [x] 5. Beszélgetések, kapcsolatok, pletyka
 - [ ] 6. Gazdaság
 - [ ] 7. „Amíg nem néztél oda”
 - [ ] 8. Isten-mód

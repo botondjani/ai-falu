@@ -138,3 +138,51 @@ describe("LLM gateway", () => {
     expect(verifyRun(store, runId).ok).toBe(true);
   });
 });
+
+describe("beszélgetés (LLM-réteg)", () => {
+  it("a mock párbeszéd mindig átmegy a sémán és a validáláson", async () => {
+    const { VILLAGERS } = await import("@falu/core");
+    const { conversationSchema, mockConversation, validateConversation } = await import("../src/agents/conversation");
+    const world = createWorld("t", VILLAGERS);
+    const ids = world.state.agents.map((a) => a.id);
+    for (let i = 0; i < 40; i++) {
+      world.state.tick = i * 7;
+      const a = world.state.agents[i % 15];
+      const b = world.state.agents[(i * 7 + 3) % 15 === i % 15 ? (i + 1) % 15 : (i * 7 + 3) % 15];
+      const o = mockConversation(a, b, world);
+      expect(conversationSchema(a, b, ids).safeParse(o).success).toBe(true);
+      expect(validateConversation(o, a, b, world)).toBeUndefined();
+    }
+  });
+
+  it("validálás: mindkét fél szóljon, a pletyka harmadik személyről szóljon", async () => {
+    const { VILLAGERS } = await import("@falu/core");
+    const { mockConversation, validateConversation } = await import("../src/agents/conversation");
+    const world = createWorld("t", VILLAGERS);
+    const [a, b] = world.state.agents;
+    const o = mockConversation(a, b, world);
+    expect(validateConversation({ ...o, replikak: o.replikak.filter((r) => r.beszelo === a.id) }, a, b, world)).toMatch(/mindkét/);
+    expect(
+      validateConversation({ ...o, pletyka: { ...o.pletyka, van: true, mondja: a.id, kirol: b.id, szoveg: "x" } }, a, b, world),
+    ).toMatch(/harmadik/);
+  });
+
+  it("a teljes falu beszélgetésekkel és pletykával is pontosan visszajátszható", async () => {
+    const { VILLAGERS } = await import("@falu/core");
+    const store = new EventStore(":memory:");
+    const runId = store.createRun("t");
+    const gw = new LlmGateway(new MockClient(), MODELS, BUDGET, store, runId);
+    const runner = new Runner({
+      world: createWorld("t", VILLAGERS),
+      secondsPerDay: 600,
+      store,
+      runId,
+      inputs: new LiveMind(gw, { llmAgents: "all", onBudget: "pause" }, store, runId),
+    });
+    await runner.runTicks(2 * TICKS_PER_DAY);
+    const events = store.events(runId);
+    expect(events.some((e) => e.type === "conversation")).toBe(true);
+    expect(events.some((e) => e.type === "gossip")).toBe(true);
+    expect(verifyRun(store, runId).ok).toBe(true);
+  });
+});

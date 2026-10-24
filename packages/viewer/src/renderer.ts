@@ -9,6 +9,8 @@ interface AgentSprite {
   root: Container;
   bubble: Container;
   bubbleUntil: number;
+  /** Később megjelenő buborékok (párbeszéd sorai). */
+  queue: { text: string; at: number }[];
   /** Az aktuális animáció útvonala csempékben: [kiindulás, ...lépések]. */
   route: Point[];
   t0: number;
@@ -102,6 +104,8 @@ export class VillageRenderer {
       if (e.type === "activity_started" && e.say) {
         const s = this.sprites.get(e.agentId);
         if (s) this.showBubble(s, e.say, now);
+      } else if (e.type === "conversation") {
+        e.lines.forEach((l, i) => this.sprites.get(l.speaker)?.queue.push({ text: l.text, at: now + i * 2600 }));
       }
     }
   }
@@ -122,7 +126,7 @@ export class VillageRenderer {
     s.bubble.addChild(bg, tail, label);
     s.bubble.position.set(-6, -16 - label.height - pad);
     s.bubble.visible = true;
-    s.bubbleUntil = now + 5000;
+    s.bubbleUntil = now + (s.queue.length ? 2500 : 5000);
   }
 
   private createSprite(a: AgentView): AgentSprite {
@@ -143,7 +147,7 @@ export class VillageRenderer {
     root.cursor = "pointer";
     root.on("pointertap", () => this.onAgentClick?.(a.id));
     this.agentLayer.addChild(root);
-    const s: AgentSprite = { root, bubble, bubbleUntil: 0, route: [a.pos], t0: 0, dur: 1 };
+    const s: AgentSprite = { root, bubble, bubbleUntil: 0, queue: [], route: [a.pos], t0: 0, dur: 1 };
     this.place(s, a.pos);
     return s;
   }
@@ -165,6 +169,7 @@ export class VillageRenderer {
     const now = performance.now();
     for (const s of this.sprites.values()) {
       this.place(s, this.currentPos(s, now));
+      if (s.queue.length && s.queue[0].at <= now) this.showBubble(s, s.queue.shift()!.text, now);
       if (s.bubble.visible && now > s.bubbleUntil) s.bubble.visible = false;
       // a beszélő kerüljön felülre
       s.root.zIndex = s.bubble.visible ? 1 : 0;

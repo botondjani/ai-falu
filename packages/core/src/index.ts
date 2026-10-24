@@ -12,3 +12,4 @@ export * from "./seed/demo";
 export * from "./describe";
 export * from "./memory";
 export * from "./seed/villagers";
+export * from "./social";

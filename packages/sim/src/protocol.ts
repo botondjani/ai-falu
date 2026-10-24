@@ -16,6 +16,9 @@ export interface AgentView {
   inventory: Inventory;
   mood?: string;
   planGoal?: string;
+  /** A lakó véleménye másokról (csak a nem semlegesek). */
+  relations: { with: string; trust: number; liking: number }[];
+  knownGossip: number;
 }
 
 export interface SimStatus {
