@@ -2,13 +2,11 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { Runner } from "./runner";
 import type { SummaryService } from "./summary/service";
 import type { ClientMessage, ServerMessage } from "./protocol";
+import { handleClientMessage, initMessage, tickMessage, type GodControls } from "./session";
+
+export type { GodControls };
 
 /** WebSocket-szerver: init üzenet csatlakozáskor, utána tickenként frissítés. */
-export interface GodControls {
-  god(text: string): void;
-  whisper(agentId: string, text: string): void;
-}
-
 export function startServer(runner: Runner, port: number, summaries?: SummaryService, god?: GodControls): WebSocketServer {
   const wss = new WebSocketServer({ port });
   const send = (ws: WebSocket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
@@ -18,58 +16,20 @@ export function startServer(runner: Runner, port: number, summaries?: SummarySer
   };
 
   wss.on("connection", (ws) => {
-    send(ws, {
-      type: "init",
-      map: runner.world.map,
-      tick: runner.world.state.tick,
-      agents: runner.agentViews(),
-      recentEvents: runner.recentEvents(),
-      status: runner.status(),
-      market: runner.market(),
-      lastSeenTick: summaries?.lastSeen() ?? runner.world.state.tick,
-    });
+    send(ws, initMessage(runner, summaries));
     ws.on("close", () => summaries?.markSeen());
-    ws.on("message", async (raw) => {
+    ws.on("message", (raw) => {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(String(raw));
       } catch {
         return;
       }
-      if (msg.type === "pause") runner.pause("kézi szünet");
-      else if (msg.type === "resume") runner.start();
-      else if (msg.type === "speed" && msg.secondsPerDay >= 10 && msg.secondsPerDay <= 3600) {
-        runner.setSpeed(msg.secondsPerDay);
-      } else if (msg.type === "seen") summaries?.markSeen();
-      else if (msg.type === "profile") send(ws, { type: "profile", profile: runner.profile(msg.agentId) });
-      else if (msg.type === "god" && god && typeof msg.text === "string" && msg.text.trim()) god.god(msg.text.trim());
-      else if (msg.type === "whisper" && god && typeof msg.text === "string" && msg.text.trim()) god.whisper(msg.agentId, msg.text.trim());
-      else if (msg.type === "summary" && summaries) {
-        try {
-          const summary = await summaries.sinceSeen(msg.mode);
-          send(ws, { type: "summary", summary });
-          if (msg.mode === "since_seen") summaries.markSeen(summary.toTick);
-        } catch (e) {
-          console.error("Összefoglaló hiba:", e);
-        }
-      }
+      void handleClientMessage(msg, runner, (m) => send(ws, m), summaries, god);
     });
   });
 
   runner.onStatus(() => broadcast({ type: "status", status: runner.status() }));
-
-  runner.onTick((r, world) => {
-    broadcast({
-      type: "tick",
-      tick: world.state.tick,
-      tickMs: runner.tickMs,
-      agents: runner.agentViews(),
-      moves: r.moves,
-      events: r.events,
-      llm: runner.llmStats(),
-      market: runner.market(),
-    });
-  });
-
+  runner.onTick((r, world) => broadcast(tickMessage(runner, r, world)));
   return wss;
 }

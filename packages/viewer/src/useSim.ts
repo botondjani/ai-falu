@@ -26,6 +26,7 @@ export interface SimState {
 
 const WS_URL = import.meta.env.VITE_SIM_WS ?? `ws://${location.hostname}:8787`;
 const MAX_EVENTS = 300;
+const DEMO = import.meta.env.VITE_DEMO === "1" || new URLSearchParams(location.search).has("demo");
 /** Legalább ennyi (1 óra) kihagyás után ajánl összefoglalót. */
 const SUMMARY_MIN_TICKS = 12;
 
@@ -51,8 +52,9 @@ export function useSim(onFrame: (f: TickFrame) => void) {
   useEffect(() => {
     let closed = false;
     let retry: ReturnType<typeof setTimeout>;
-    const connect = () => {
-      const ws = new WebSocket(WS_URL);
+    const connect = async () => {
+      // Demó mód: a szimuláció a böngészőben fut (build: VITE_DEMO=1, vagy ?demo az URL-ben).
+      const ws = (DEMO ? new (await import("@falu/sim/browser")).LocalSocket() : new WebSocket(WS_URL)) as WebSocket;
       wsRef.current = ws;
       ws.onopen = () => setState((s) => ({ ...s, connected: true }));
       ws.onclose = () => {

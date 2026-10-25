@@ -32,7 +32,7 @@ export class Runner {
   readonly llmStats: () => LlmStats | undefined;
   secondsPerDay: number;
   pausedReason?: string;
-  private timer: NodeJS.Timeout | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners: TickListener[] = [];
   private statusListeners: (() => void)[] = [];
   private recent: SimEvent[] = [];
