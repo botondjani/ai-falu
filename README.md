@@ -4,6 +4,8 @@
 
 **Alapelv:** a világot determinisztikus kód viszi (idő, mozgás, útkeresés, éhség, pénz, készlet, árak). A lakók döntéseit, párbeszédeit, terveit és gondolatait a beépített, jellemhez illő generátor adja; API-kulcs és költség nincs.
 
+**Kipróbálható online:** https://botondjani.github.io/ai-falu/
+
 ## Gyors indítás
 
 ```bash
