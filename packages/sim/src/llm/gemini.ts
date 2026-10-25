@@ -2,8 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import type { LlmClient, LlmRequest, RawCompletion } from "./types";
 
-/** Gondolkodási keret (token) az effort szint szerint; a rutinhívások gondolkodás nélkül mennek. */
-const THINKING: Record<string, number> = { low: 0, medium: 1024, high: 4096 };
+/** Gondolkodás az effort szint szerint: Gemini 3-nál szint, 2.5-nél tokenkeret. */
+const THINKING_LEVEL: Record<string, string> = { low: "minimal", medium: "low", high: "high" };
+const THINKING_BUDGET: Record<string, number> = { low: 0, medium: 1024, high: 4096 };
 
 /** A zod-sémából Gemini-kompatibilis JSON-séma (a "$schema" kulcsot a Gemini nem fogadja). */
 export function toGeminiSchema(schema: z.ZodType): unknown {
@@ -21,7 +22,9 @@ export class GeminiClient implements LlmClient {
   }
 
   async complete<T>(req: LlmRequest<T>, model: string, extraUser?: string): Promise<RawCompletion> {
-    let budget = THINKING[req.effort ?? "low"] ?? 0;
+    const effort = req.effort ?? "low";
+    const gen3 = /^gemini-[3-9]/.test(model);
+    let budget = THINKING_BUDGET[effort] ?? 0;
     if (/pro/.test(model)) budget = Math.max(128, budget); // a Pro nem tud gondolkodás nélkül futni
     const res = await this.ai.models.generateContent({
       model,
@@ -30,8 +33,8 @@ export class GeminiClient implements LlmClient {
         systemInstruction: req.system.map((b) => b.text).join("\n\n"),
         responseMimeType: "application/json",
         responseJsonSchema: toGeminiSchema(req.schema),
-        maxOutputTokens: req.maxTokens + budget,
-        thinkingConfig: { thinkingBudget: budget },
+        maxOutputTokens: req.maxTokens + (gen3 ? 4096 : budget),
+        thinkingConfig: gen3 ? { thinkingLevel: THINKING_LEVEL[effort] as never } : { thinkingBudget: budget },
       },
     });
     const finish = res.candidates?.[0]?.finishReason;

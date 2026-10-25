@@ -41,13 +41,13 @@ describe("Gemini kliens", () => {
         effort: "low",
         mock: () => ({}),
       },
-      "gemini-2.5-flash-lite",
+      "gemini-3.5-flash-lite",
     );
     expect(res.json).toEqual({ ok: true });
     expect(res.usage).toEqual({ inputTokens: 400, outputTokens: 70, cacheReadTokens: 600, cacheWriteTokens: 0 });
     expect(body.generationConfig.responseMimeType).toBe("application/json");
-    expect(body.generationConfig.thinkingConfig.thinkingBudget).toBe(0);
+    expect(body.generationConfig.thinkingConfig.thinkingLevel).toBe("minimal");
     expect(JSON.stringify(body.systemInstruction)).toContain("persona");
-    expect(costUsd("gemini-2.5-flash-lite", res.usage)).toBeCloseTo((400 * 0.1 + 70 * 0.4 + 600 * 0.01) / 1e6);
+    expect(costUsd("gemini-3.5-flash-lite", res.usage)).toBeCloseTo((400 * 0.3 + 70 * 2.5 + 600 * 0.03) / 1e6);
   });
 });
