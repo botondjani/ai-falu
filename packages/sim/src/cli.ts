@@ -1,9 +1,7 @@
 import { DEMO_VILLAGERS, TICKS_PER_DAY, VILLAGERS, createWorld, describeEvent, lookupFrom, stamp, timeToTick, type World } from "@falu/core";
 import { LiveMind, ReplayInputs } from "./agents/mind";
-import { llmConfig, loadDotEnv } from "./config";
-import { AnthropicClient } from "./llm/anthropic";
+import { llmConfig, loadDotEnv, makeClient } from "./config";
 import { LlmGateway } from "./llm/gateway";
-import { MockClient } from "./llm/mock";
 import { recordedInputs, verifyRun, worldAt } from "./replay";
 import { Runner } from "./runner";
 import { startServer } from "./server";
@@ -97,8 +95,9 @@ function parseArgs(argv: string[]): CliArgs {
     } else throw new Error(`Ismeretlen kapcsoló: ${a}\n\n${HELP}`);
   }
   // API-kulcs nélkül mindig mock mód: a falu így is teljesen működik (autopilot + mock LLM).
-  if (!process.env.ANTHROPIC_API_KEY && !args.mock) {
-    console.log("Nincs ANTHROPIC_API_KEY – mock módban fut (költség nélkül).");
+  const keyVar = process.env.LLM_PROVIDER === "anthropic" ? "ANTHROPIC_API_KEY" : "GEMINI_API_KEY";
+  if (!process.env[keyVar] && !args.mock) {
+    console.log(`Nincs ${keyVar} – mock módban fut (költség nélkül).`);
     args.mock = true;
   }
   return args;
@@ -132,7 +131,7 @@ async function main() {
   }
 
   const cfg = llmConfig();
-  const client = args.mock || !cfg.apiKey ? new MockClient() : new AnthropicClient(cfg.apiKey);
+  const client = makeClient(cfg, args.mock);
 
   if (args.summary !== undefined) {
     const run = store.getRun(args.summary);

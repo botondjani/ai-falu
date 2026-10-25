@@ -7,8 +7,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { VILLAGERS, buildVillageMap, type VillagerSeed } from "@falu/core";
-import { llmConfig, loadDotEnv } from "../config";
-import { AnthropicClient } from "../llm/anthropic";
+import { llmConfig, loadDotEnv, makeClient } from "../config";
 import { LlmGateway } from "../llm/gateway";
 
 const SEED_PATH = fileURLToPath(new URL("../../../core/src/seed/villagers.json", import.meta.url));
@@ -32,7 +31,7 @@ async function main() {
   const theme = args.includes("--theme") ? args[args.indexOf("--theme") + 1] : "";
   const cfg = llmConfig();
   if (!cfg.apiKey) {
-    console.log("Nincs ANTHROPIC_API_KEY – a beégetett seed marad:", SEED_PATH);
+    console.log("Nincs API-kulcs (GEMINI_API_KEY) – a beégetett seed marad:", SEED_PATH);
     return;
   }
 
@@ -57,7 +56,7 @@ async function main() {
     ),
   });
 
-  const gateway = new LlmGateway(new AnthropicClient(cfg.apiKey), cfg.models, cfg.budget);
+  const gateway = new LlmGateway(makeClient(cfg), cfg.models, cfg.budget);
   const res = await gateway.call(
     {
       purpose: "generate-villagers",

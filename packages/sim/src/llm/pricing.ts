@@ -1,10 +1,13 @@
 import type { LlmUsage } from "./types";
 
-/** $ / millió token. Cache-olvasás 0.1×, 5 perces cache-írás 1.25× az input árának. */
+/** $ / millió token. Cache-olvasás 0.1×, cache-írás 1.25× az input árának (Gemininél nincs írási díj). */
 export const PRICING: Record<string, { input: number; output: number }> = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
   "claude-sonnet-5-5": { input: 2, output: 10 },
   "claude-opus-5-5": { input: 4, output: 20 },
+  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
+  "gemini-2.5-flash": { input: 0.3, output: 2.5 },
+  "gemini-2.5-pro": { input: 1.25, output: 10 },
 };
 
 export function costUsd(model: string, u: LlmUsage): number {

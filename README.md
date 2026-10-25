@@ -12,7 +12,9 @@ npm run sim                     # élő szimuláció (WebSocket: ws://localhost:
 npm run viewer                  # másik terminálban → http://localhost:5173
 ```
 
-**API-kulcs nélkül is működik:** ha nincs `ANTHROPIC_API_KEY`, automatikusan **mock módban** fut. A lakók determinisztikus, jellemhez illő döntéseket hoznak, sablonos párbeszédeket folytatnak, a költségszámláló pedig mutatja, mennyibe került volna valódi API-val. Valódi LLM-hez másold a `.env.example`-t `.env`-be, és add meg a kulcsot.
+**LLM: Google Gemini** (alap). A könnyű feladatokat (terv, döntés, beszélgetés) a `gemini-2.5-flash-lite`, a nehezebbeket (reflexió, összefoglaló, Isten-mód) a `gemini-2.5-flash` végzi. `LLM_PROVIDER=anthropic` mellett Claude-dal is fut.
+
+**API-kulcs nélkül is működik:** ha nincs `GEMINI_API_KEY`, automatikusan **mock módban** fut. A lakók determinisztikus, jellemhez illő döntéseket hoznak, sablonos párbeszédeket folytatnak, a költségszámláló pedig mutatja, mennyibe került volna valódi API-val. Valódi LLM-hez másold a `.env.example`-t `.env`-be, és írd be a kulcsot (Google AI Studio → API keys). A `.env` nem kerül a gitbe, **a kulcsot soha ne írd a kódba**.
 
 ```bash
 npm run sim -- --days 5 --mock  # headless, kb. 1-2 mp, összegzéssel
@@ -40,34 +42,33 @@ npm run typecheck
 
 ## Költségbecslés
 
-15 lakó egy szimulált napja nagyjából **90 LLM-hívás**:
+15 lakó egy szimulált napja nagyjából **90 LLM-hívás** (alapértelmezett Gemini-modellekkel):
 
 | Hívás | Modell | Db / nap | Kb. token (be / ki) | Kb. $ / nap |
 |---|---|---|---|---|
-| Napi terv (6:00) | Haiku 5.5, effort low | 15 | 1k / 0.5k | 0.005 |
-| Döntés váratlan helyzetben | Haiku 5.5, effort low | ~30 | 1.2k / 0.3k | 0.008 |
-| Beszélgetés (egy hívás az egész párbeszéd) | Haiku 5.5, effort low | ~30 | 1.5k / 0.6k | 0.013 |
-| Esti reflexió (21:30) | Sonnet 5.5, effort low | 15 | 1.5k / 0.6k | 0.14 |
-| **Összesen** | | **~90** | | **≈ $0.15–0.30 / szimulált nap** |
+| Napi terv, döntés, beszélgetés | gemini-2.5-flash-lite ($0.10 / $0.40) | ~75 | 1.5k / 0.4k | 0.02 |
+| Esti reflexió | gemini-2.5-flash ($0.30 / $2.50) | 15 | 1.5k / 0.6k | 0.03 |
+| **Összesen** | | **~90** | | **≈ $0.05 / szimulált nap** |
 
-- 10 perces napokkal ez óránként kb. **$1–2** folyamatos futásnál. Egy „Amíg nem néztél oda” összefoglaló kb. $0.02 (Sonnet), az Isten-mód esemény kb. $0.01.
-- A költség zömét a Sonnet-reflexió adja. `LLM_MODEL_STRONG=claude-haiku-5-5` mellett minden Haikun fut, így **≈ $0.03–0.05 / nap**.
-- A becslés a mock mód tokenmérésén alapul, a gondolkodási tokenekre ráhagyással. A pontos költést a viewer költségpanelje és az `llm_calls` tábla mutatja.
+- 10 perces napokkal ez óránként kb. **$0.30** folyamatos futásnál. Egy „Amíg nem néztél oda” összefoglaló kb. $0.005.
+- Okosabb modellhez: `LLM_MODEL_STRONG=gemini-2.5-pro` ($1.25 / $10), ekkor kb. $0.15 / nap.
+- A becslés a mock mód tokenmérésén alapul. A pontos költést a viewer költségpanelje és az `llm_calls` tábla mutatja.
 - **Költségkeret:** összes költés futásonként, napi valós költés és hívás/szimulált nap. A keret elérésekor a szimuláció szünetel; `LLM_ON_BUDGET=autopilot` mellett LLM nélkül fut tovább.
 
 Mitől olcsó:
 - A rutint (alvás, evés, munkába járás, vásárlás éhség esetén) szabály-alapú autopilot viszi, LLM nélkül.
 - A napi tervet a lakó LLM nélkül követi. Csak terv nélküli időben vagy váratlan esemény után (fontos új emlék: pletyka, Isten-mód, suttogás) kérdezi az LLM-et.
 - A beszélgetés egyetlen hívás (az egész párbeszéd + emlékek + véleményváltozás + pletyka).
-- **Prompt caching:** a világszabályok és a személyleírás stabil prefix `cache_control` breakpointtal, a változó helyzet utána jön.
+- **Prompt caching:** a világszabályok és a személyleírás stabil prefix, a változó helyzet utána jön. A Gemini ezt automatikusan cache-eli; Claude-nál `cache_control` breakpoint jelöli.
 
 ## Konfiguráció (`.env`)
 
 | Változó | Alap | Leírás |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | – | nélküle mock mód |
-| `LLM_MODEL_ROUTINE` | `claude-haiku-5-5` | terv, döntés, beszélgetés |
-| `LLM_MODEL_STRONG` | `claude-sonnet-5-5` | reflexió, összefoglaló, Isten-mód |
+| `LLM_PROVIDER` | `gemini` | `gemini` vagy `anthropic` |
+| `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | – | nélküle mock mód |
+| `LLM_MODEL_ROUTINE` | `gemini-2.5-flash-lite` | terv, döntés, beszélgetés |
+| `LLM_MODEL_STRONG` | `gemini-2.5-flash` | reflexió, összefoglaló, Isten-mód |
 | `LLM_MAX_USD_TOTAL` | 5 | futásonkénti keret ($) |
 | `LLM_MAX_USD_PER_DAY` | 2 | valós napi keret ($), minden futásra együtt |
 | `LLM_MAX_CALLS_PER_SIM_DAY` | 600 | hívás / szimulált nap |
@@ -103,14 +104,14 @@ Mitől olcsó:
 - **Napi terv** (6:00): 3–7 lépés. **Esti reflexió** (21:30): 1–3 magasabb szintű tanulság fontossággal („Béla nem megbízható.”) és hangulat.
 - **Beszélgetés:** ráérő lakók egy helyen (a kocsmában és a téren gyakrabban), cooldownnal. Egy hívásban 4–6 replika, mindkét fél emléke, véleményváltozás (±15) és opcionálisan pletyka.
 - **Pletyka** azonosítóval terjed. Aki hallja, emléket kap, és megváltozik a véleménye az alanyról; csak az adható tovább, amit a mondó ismer.
-- Minden LLM-kimenet JSON-sémás (`output_config.format`, zod), szemantikailag validált. Hibánál egy újrapróba jön (a hibaüzenettel), utána biztonságos tartalék (autopilot vagy sablon).
+- Minden LLM-kimenet JSON-sémás (Gemininél `responseJsonSchema`, Claude-nál `output_config.format`; zod), szemantikailag validált. Hibánál egy újrapróba jön (a hibaüzenettel), utána biztonságos tartalék (autopilot vagy sablon).
 
 ### Isten-mód
-- **Esemény:** egy Sonnet-hívás a szöveget mechanikus hatásokra fordítja (hazamenekülés, gyűlés, készlet, pénz, hangulat, új lakó érkezése). Minden érintett fontos emléket kap. Kulcs nélkül kulcsszavas értelmezés fut.
+- **Esemény:** egy hívás az okosabb modellel a szöveget mechanikus hatásokra fordítja (hazamenekülés, gyűlés, készlet, pénz, hangulat, új lakó érkezése). Minden érintett fontos emléket kap. Kulcs nélkül kulcsszavas értelmezés fut.
 - **Suttogás:** egy gondolat a lakó fejében, ami befolyásolja a következő döntését és a beszélgetéseit.
 
 ### „Amíg nem néztél oda”
-- A szerver tárolja az utolsó megtekintést. A naplóból determinisztikusan pontozott **tények** készülnek (pletyka-terjedés, megromlott vagy javult kapcsolat, éhezés, árváltozás, kereset, reflexiók, Isten-mód), ezekből egy Sonnet-hívás 5–10 mondatos, színes, kicsit humoros elbeszélést ír, és sorszámmal kiemeli a 3 legfontosabbat. Az összefoglalók gyorsítótárazva vannak.
+- A szerver tárolja az utolsó megtekintést. A naplóból determinisztikusan pontozott **tények** készülnek (pletyka-terjedés, megromlott vagy javult kapcsolat, éhezés, árváltozás, kereset, reflexiók, Isten-mód), ezekből egy hívás az okosabb modellel 5–10 mondatos, színes, kicsit humoros elbeszélést ír, és sorszámmal kiemeli a 3 legfontosabbat. Az összefoglalók gyorsítótárazva vannak.
 
 ### Napló, determinizmus, visszajátszás
 - Minden esemény append-only **SQLite** naplóba kerül (`events`), napi snapshottal (`snapshots`). A külső bemenetek (LLM-döntés, terv, reflexió, beszélgetés, Isten-mód, suttogás) az `inputs` táblába, a hívások részletei az `llm_calls` táblába mennek.
