@@ -40,22 +40,6 @@ npm run typecheck
 | `--summary ID [--from-day D]` | „Amíg nem néztél oda” a terminálban |
 | `--db FILE`, `--port P`, `-v` | SQLite fájl, WS port, minden esemény kiírása |
 
-## Élesítés HTTPS-címen (Render)
-
-A szimuláció egy Node-folyamat, ami ugyanazon a porton szolgálja ki a weboldalt és a WebSocketet, így egy HTTPS-cím mögött is működik (`wss://`).
-
-1. [render.com](https://render.com) → **New → Blueprint** → válaszd ki ezt a GitHub-repót. A `render.yaml` mindent beállít.
-2. Telepítéskor a Render bekéri a titkokat:
-   - `GEMINI_API_KEY`: a Gemini-kulcsod (a Google AI Studióban, az API keys menüben kapod),
-   - `SIM_PASSWORD`: jelszó a faluhoz, hogy más ne használja a keretedet.
-3. Kész: `https://ai-falu.onrender.com/?pw=JELSZÓ` (az első megnyitás után a böngésző megjegyzi a jelszót).
-
-Tudnivalók:
-- A `starter` csomag kb. $7/hó. Az ingyenes csomag 15 perc tétlenség után elalszik (ilyenkor a falu sem él), és nincs tartós lemeze.
-- Újraindítás után a falu a legutóbbi napi snapshotból folytatódik (`SIM_AUTO_RESUME=1`, adatbázis a `/data` lemezen).
-- **Költség:** a beállított sebességgel (1 nap = 1 óra) ez kb. $3–4 lenne naponta, de a `LLM_MAX_USD_PER_DAY=1` keret után a falu aznap LLM nélkül, autopiloton él tovább. A sebességet és a keretet a Render Environment fülén állíthatod.
-- Docker máshol is fut: `docker build -t falu . && docker run -p 8787:8787 -e GEMINI_API_KEY=... -e SIM_PASSWORD=... falu`
-
 ## Költségbecslés
 
 15 lakó egy szimulált napja nagyjából **90 LLM-hívás** (alapértelmezett Gemini-modellekkel):

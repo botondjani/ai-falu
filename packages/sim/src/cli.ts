@@ -5,7 +5,6 @@ import { LlmGateway } from "./llm/gateway";
 import { recordedInputs, verifyRun, worldAt } from "./replay";
 import { Runner } from "./runner";
 import { startServer } from "./server";
-import { resolve } from "node:path";
 import { EventStore } from "./store";
 import { SummaryService } from "./summary/service";
 import { summarize } from "./summary/summary";
@@ -53,7 +52,7 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     mock: false,
     seed: process.env.SIM_SEED ?? "falu",
-    port: Number(process.env.PORT ?? process.env.SIM_PORT ?? 8787),
+    port: Number(process.env.SIM_PORT ?? 8787),
     secondsPerDay: Number(process.env.SIM_SECONDS_PER_DAY ?? 600),
     verbose: false,
     db: process.env.SIM_DB ?? "data/falu.db",
@@ -178,9 +177,6 @@ async function main() {
   };
 
   const villagers = args.villagers === "demo" ? DEMO_VILLAGERS : VILLAGERS;
-  // Tárhelyen: újraindítás után a legutóbbi futás folytatódik (ha van).
-  if (args.resume === undefined && args.days === undefined && process.env.SIM_AUTO_RESUME === "1" && store.latestRunId() !== undefined)
-    args.resume = "latest";
   let runner: Runner;
   let gateway: LlmGateway;
   let mind: LiveMind;
@@ -251,13 +247,10 @@ async function main() {
     return;
   }
 
-  startServer(
-    runner,
-    args.port,
-    new SummaryService(runner, gateway, store, runner.runId),
-    { god: (text) => mind.enqueueGod(text), whisper: (agentId, text) => mind.enqueueWhisper(agentId, text) },
-    { staticDir: process.env.SIM_STATIC_DIR ? resolve(process.env.SIM_STATIC_DIR) : undefined, password: process.env.SIM_PASSWORD || undefined },
-  );
+  startServer(runner, args.port, new SummaryService(runner, gateway, store, runner.runId), {
+    god: (text) => mind.enqueueGod(text),
+    whisper: (agentId, text) => mind.enqueueWhisper(agentId, text),
+  });
   runner.onTick((r, world) => {
     if (args.verbose) for (const e of r.events) console.log(`[${stamp(e.tick)}] ${describeEvent(e, names(world))}`);
   });
