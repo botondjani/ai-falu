@@ -12,7 +12,7 @@ npm run sim                     # élő szimuláció (WebSocket: ws://localhost:
 npm run viewer                  # másik terminálban → http://localhost:5173
 ```
 
-**LLM: Google Gemini** (alap). A könnyű feladatokat (terv, döntés, beszélgetés) a `gemini-3.5-flash-lite`, a nehezebbeket (reflexió, összefoglaló, Isten-mód) a `gemini-3.8-flash` végzi. `LLM_PROVIDER=anthropic` mellett Claude-dal is fut.
+**LLM: Google Gemini** (alap). A könnyű feladatokat (terv, döntés, beszélgetés) a `gemini-2.5-flash-lite`, a nehezebbeket (reflexió, összefoglaló, Isten-mód) a `gemini-2.5-flash` végzi. `LLM_PROVIDER=anthropic` mellett Claude-dal is fut.
 
 **API-kulcs nélkül is működik:** ha nincs `GEMINI_API_KEY`, automatikusan **mock módban** fut. A lakók determinisztikus, jellemhez illő döntéseket hoznak, sablonos párbeszédeket folytatnak, a költségszámláló pedig mutatja, mennyibe került volna valódi API-val. Valódi LLM-hez másold a `.env.example`-t `.env`-be, és írd be a kulcsot (Google AI Studio → API keys). A `.env` nem kerül a gitbe, **a kulcsot soha ne írd a kódba**.
 
@@ -46,14 +46,12 @@ npm run typecheck
 
 | Hívás | Modell | Db / nap | Kb. token (be / ki) | Kb. $ / nap |
 |---|---|---|---|---|
-| Napi terv, döntés, beszélgetés | gemini-3.5-flash-lite ($0.30 / $2.50) | ~75 | 1.5k / 0.4k | 0.11 |
-| Esti reflexió | gemini-3.8-flash ($0.75 / $3.75*) | 15 | 1.5k / 0.6k | 0.05 |
-| **Összesen** | | **~90** | | **≈ $0.15 / szimulált nap** |
+| Napi terv, döntés, beszélgetés | gemini-2.5-flash-lite ($0.10 / $0.40) | ~75 | 1.5k / 0.4k | 0.02 |
+| Esti reflexió | gemini-2.5-flash ($0.30 / $2.50) | 15 | 1.5k / 0.6k | 0.03 |
+| **Összesen** | | **~90** | | **≈ $0.05 / szimulált nap** |
 
-\* 2026. december 31-ig akciós ár; 2027-től $1.50 / $7.50, ekkor kb. $0.20 / nap.
-
-- 10 perces napokkal ez óránként kb. **$1** folyamatos futásnál. Egy „Amíg nem néztél oda” összefoglaló kb. $0.01.
-- Olcsóbb változat: `LLM_MODEL_ROUTINE=gemini-2.5-flash-lite` ($0.10 / $0.40), ekkor kb. $0.06 / nap.
+- 10 perces napokkal ez óránként kb. **$0.30** folyamatos futásnál. Egy „Amíg nem néztél oda” összefoglaló kb. $0.005.
+- Okosabb modellhez: `LLM_MODEL_STRONG=gemini-2.5-pro` ($1.25 / $10), ekkor kb. $0.15 / nap.
 - A becslés a mock mód tokenmérésén alapul. A pontos költést a viewer költségpanelje és az `llm_calls` tábla mutatja.
 - **Költségkeret:** összes költés futásonként, napi valós költés és hívás/szimulált nap. A keret elérésekor a szimuláció szünetel; `LLM_ON_BUDGET=autopilot` mellett LLM nélkül fut tovább.
 
@@ -69,8 +67,8 @@ Mitől olcsó:
 |---|---|---|
 | `LLM_PROVIDER` | `gemini` | `gemini` vagy `anthropic` |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | – | nélküle mock mód |
-| `LLM_MODEL_ROUTINE` | `gemini-3.5-flash-lite` | terv, döntés, beszélgetés |
-| `LLM_MODEL_STRONG` | `gemini-3.8-flash` | reflexió, összefoglaló, Isten-mód |
+| `LLM_MODEL_ROUTINE` | `gemini-2.5-flash-lite` | terv, döntés, beszélgetés |
+| `LLM_MODEL_STRONG` | `gemini-2.5-flash` | reflexió, összefoglaló, Isten-mód |
 | `LLM_MAX_USD_TOTAL` | 5 | futásonkénti keret ($) |
 | `LLM_MAX_USD_PER_DAY` | 2 | valós napi keret ($), minden futásra együtt |
 | `LLM_MAX_CALLS_PER_SIM_DAY` | 600 | hívás / szimulált nap |

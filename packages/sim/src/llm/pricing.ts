@@ -5,9 +5,6 @@ export const PRICING: Record<string, { input: number; output: number }> = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
   "claude-sonnet-5-5": { input: 2, output: 10 },
   "claude-opus-5-5": { input: 4, output: 20 },
-  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
-  // 2026. dec. 31-ig akciós ár; 2027-től $1.50 / $7.50
-  "gemini-3.8-flash": { input: 0.75, output: 3.75 },
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-2.5-flash": { input: 0.3, output: 2.5 },
   "gemini-2.5-pro": { input: 1.25, output: 10 },

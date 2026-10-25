@@ -23,7 +23,7 @@ export function llmConfig() {
   const provider = env.LLM_PROVIDER === "anthropic" ? ("anthropic" as const) : ("gemini" as const);
   const defaults =
     provider === "gemini"
-      ? { routine: "gemini-3.5-flash-lite", strong: "gemini-3.8-flash" }
+      ? { routine: "gemini-2.5-flash-lite", strong: "gemini-2.5-flash" }
       : { routine: "claude-haiku-5-5", strong: "claude-sonnet-5-5" };
   const models: Record<ModelTier, string> = {
     routine: env.LLM_MODEL_ROUTINE || defaults.routine,
