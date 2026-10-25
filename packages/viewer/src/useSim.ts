@@ -24,7 +24,27 @@ export interface SimState {
   profile: ProfileView | null;
 }
 
-const WS_URL = import.meta.env.VITE_SIM_WS ?? `ws://${location.hostname}:8787`;
+// Fejlesztéskor külön porton fut a szimuláció; élesben ugyanarról a címről (https → wss).
+const WS_BASE =
+  import.meta.env.VITE_SIM_WS ??
+  (import.meta.env.DEV ? `ws://${location.hostname}:8787` : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
+
+function password(): string {
+  const fromUrl = new URLSearchParams(location.search).get("pw");
+  if (fromUrl) {
+    try {
+      localStorage.setItem("falu-pw", fromUrl);
+    } catch {
+      /* nincs tárhely */
+    }
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem("falu-pw") ?? "";
+  } catch {
+    return "";
+  }
+}
 const MAX_EVENTS = 300;
 const DEMO = import.meta.env.VITE_DEMO === "1" || new URLSearchParams(location.search).has("demo");
 /** Legalább ennyi (1 óra) kihagyás után ajánl összefoglalót. */
@@ -54,11 +74,26 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     let retry: ReturnType<typeof setTimeout>;
     const connect = async () => {
       // Demó mód: a szimuláció a böngészőben fut (build: VITE_DEMO=1, vagy ?demo az URL-ben).
-      const ws = (DEMO ? new (await import("@falu/sim/browser")).LocalSocket() : new WebSocket(WS_URL)) as WebSocket;
+      const ws = (DEMO ? new (await import("@falu/sim/browser")).LocalSocket() : new WebSocket(`${WS_BASE}/?pw=${encodeURIComponent(password())}`)) as WebSocket;
+      let opened = DEMO;
       wsRef.current = ws;
-      ws.onopen = () => setState((s) => ({ ...s, connected: true }));
+      ws.onopen = () => {
+        opened = true;
+        setState((s) => ({ ...s, connected: true }));
+      };
       ws.onclose = () => {
         setState((s) => ({ ...s, connected: false }));
+        // Meg sem nyílt: valószínűleg jelszó kell (vagy rossz).
+        if (!opened && !DEMO && !closed) {
+          const pw = window.prompt("A falu jelszóval védett. Jelszó:");
+          if (pw) {
+            try {
+              localStorage.setItem("falu-pw", pw);
+            } catch {
+              /* nincs tárhely */
+            }
+          }
+        }
         if (!closed) retry = setTimeout(connect, 1500);
       };
       ws.onmessage = (ev) => {
