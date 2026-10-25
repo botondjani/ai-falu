@@ -9,8 +9,7 @@
     "sim": "tsx packages/sim/src/cli.ts",
     "viewer": "npm -w @falu/viewer run dev",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/core && tsc -p packages/sim && tsc -p packages/viewer",
-    "generate-villagers": "tsx packages/sim/src/tools/generate-villagers.ts"
+    "typecheck": "tsc -p packages/core && tsc -p packages/sim && tsc -p packages/viewer"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -10,8 +10,6 @@ import { extractFacts, topFacts } from "../src/summary/facts";
 import { SummaryService } from "../src/summary/service";
 import { summarize } from "../src/summary/summary";
 
-const MODELS = { routine: "claude-haiku-5-5", strong: "claude-sonnet-5-5" };
-const BUDGET = { maxUsdTotal: 1, maxUsdPerRealDay: 1, maxCallsPerSimDay: 10_000 };
 const world = createWorld("t", VILLAGERS);
 const n = lookupFrom(world.state.agents, world.map.locations);
 
@@ -77,22 +75,22 @@ describe("összefoglaló", () => {
       talk(5, "joska", "gizi", -8),
       { tick: 6, type: "tool_broke", agentId: "pista" },
     ];
-    const gw = new LlmGateway(new MockClient(), MODELS, BUDGET);
+    const gw = new LlmGateway(new MockClient());
     const s = await summarize(world, events, 0, 10, gw);
     expect(s.highlights).toHaveLength(3);
     expect(new Set(s.highlights.map((h) => h.title)).size).toBe(3);
     expect(s.story).toMatch(/Gábor sikkasztott/);
-    expect(gw.stats.calls).toBe(1);
+    expect(gw.calls).toBe(1);
   });
 
-  it("LLM-hiba esetén sablonos tartalék", async () => {
+  it("generálási hiba esetén sablonos tartalék", async () => {
     const broken: LlmClient = {
       mock: false,
-      async complete<T>(_r: LlmRequest<T>, model: string): Promise<RawCompletion> {
-        return { json: { rossz: true }, model, usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 } };
+      async complete<T>(_r: LlmRequest<T>): Promise<RawCompletion> {
+        return { json: { rossz: true } };
       },
     };
-    const s = await summarize(world, [talk(4, "joska", "gizi", -8)], 0, 10, new LlmGateway(broken, MODELS, BUDGET));
+    const s = await summarize(world, [talk(4, "joska", "gizi", -8)], 0, 10, new LlmGateway(broken));
     expect(s.mock).toBe(true);
     expect(s.story.length).toBeGreaterThan(20);
   });
@@ -100,22 +98,22 @@ describe("összefoglaló", () => {
   it("a megtekintés óta: gyorsítótárazva, az utolsó megnézés tárolva", async () => {
     const store = new EventStore(":memory:");
     const runId = store.createRun("t");
-    const gw = new LlmGateway(new MockClient(), MODELS, BUDGET, store, runId);
+    const gw = new LlmGateway(new MockClient());
     const runner = new Runner({
       world: createWorld("t", VILLAGERS),
       secondsPerDay: 600,
       store,
       runId,
-      inputs: new LiveMind(gw, { llmAgents: "all", onBudget: "pause" }, store, runId),
+      inputs: new LiveMind(gw, { llmAgents: "all" }, store, runId),
     });
     const svc = new SummaryService(runner, gw, store, runId);
     await runner.runTicks(TICKS_PER_DAY / 2);
     const s1 = await svc.sinceSeen();
     expect(s1.fromTick).toBe(0);
     expect(s1.highlights.length).toBeGreaterThan(0);
-    const calls = gw.stats.calls;
+    const calls = gw.calls;
     await svc.sinceSeen();
-    expect(gw.stats.calls).toBe(calls); // cache
+    expect(gw.calls).toBe(calls); // cache
     svc.markSeen();
     expect(store.getLastSeen(runId)).toBe(runner.world.state.tick);
   });

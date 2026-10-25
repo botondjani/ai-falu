@@ -1,6 +1,5 @@
 import { SHOP, TAVERN, TICKS_PER_DAY, currentPrices, getRelation, knownGossip, mealPrice, stepWorld, type ExternalInputs, type SimEvent, type StepResult, type World } from "@falu/core";
 import type { InputProvider } from "./agents/mind";
-import { BudgetExceededError, type LlmStats } from "./llm/gateway";
 import type { AgentView, MarketView, ProfileView, SimStatus } from "./protocol";
 import type { EventStore } from "./store";
 
@@ -16,7 +15,6 @@ export interface RunnerOptions {
   stopAtTick?: number;
   /** Külső (LLM vagy rögzített) bemenetek forrása. */
   inputs?: InputProvider;
-  llmStats?: () => LlmStats | undefined;
 }
 
 type TickListener = (r: StepResult, world: World) => void;
@@ -29,7 +27,6 @@ export class Runner {
   readonly mode: SimStatus["mode"];
   stopAtTick?: number;
   readonly inputs?: InputProvider;
-  readonly llmStats: () => LlmStats | undefined;
   secondsPerDay: number;
   pausedReason?: string;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -45,7 +42,6 @@ export class Runner {
     this.mode = opts.mode ?? "élő";
     this.stopAtTick = opts.stopAtTick;
     this.inputs = opts.inputs;
-    this.llmStats = opts.llmStats ?? (() => undefined);
     if (this.store && this.runId !== undefined && this.world.state.tick % TICKS_PER_DAY === 0) {
       this.store.saveSnapshot(this.runId, this.world.state);
     }
@@ -63,23 +59,9 @@ export class Runner {
     this.statusListeners.push(fn);
   }
 
-  /**
-   * Egy tick: előbb a döntési ponton álló lakók külső döntései (LLM), aztán a determinisztikus lépés.
-   * Keret elérésekor nem lép, hanem null-t ad és szünetel.
-   */
+  /** Egy tick: előbb a lakók külső döntései (terv, beszélgetés, Isten-mód), aztán a determinisztikus lépés. */
   async advance(): Promise<StepResult | null> {
-    let external: ExternalInputs = {};
-    if (this.inputs) {
-      try {
-        external = await this.inputs.collect(this.world);
-      } catch (e) {
-        if (e instanceof BudgetExceededError) {
-          this.pause(`költségkeret: ${e.message}`);
-          return null;
-        }
-        throw e;
-      }
-    }
+    const external: ExternalInputs = this.inputs ? await this.inputs.collect(this.world) : {};
     const r = this.step(external);
     this.inputs?.observe?.(r.events);
     return r;
@@ -151,7 +133,6 @@ export class Runner {
       running: this.running,
       speed: this.secondsPerDay,
       pausedReason: this.pausedReason,
-      llm: this.llmStats(),
       mode: this.mode,
       godMode: this.mode === "élő",
       runId: this.runId,
@@ -162,7 +143,7 @@ export class Runner {
     return [...this.recent];
   }
 
-  /** Headless futás, ember és várakozás nélkül. Leáll, ha elfogy a keret. */
+  /** Headless futás, ember és várakozás nélkül. */
   async runTicks(n: number): Promise<void> {
     for (let i = 0; i < n && !this.atEnd(); i++) {
       if (!(await this.advance())) return;

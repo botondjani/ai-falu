@@ -14,7 +14,7 @@ import {
   type SimEvent,
   type World,
 } from "@falu/core";
-import { BudgetExceededError, type LlmGateway } from "../llm/gateway";
+import type { LlmGateway } from "../llm/gateway";
 import type { EventStore } from "../store";
 import {
   conversationPromptText,
@@ -38,8 +38,6 @@ export interface InputProvider {
 export interface LiveMindOptions {
   /** Mely lakók gondolkodnak LLM-mel ("all" = mind). */
   llmAgents: Set<string> | "all";
-  /** Keret elérésekor: szünet (alap) vagy autopilot. */
-  onBudget: "pause" | "autopilot";
 }
 
 /** Reggel 6:00 napi terv, este 21:30 reflexió. */
@@ -91,22 +89,9 @@ export class LiveMind implements InputProvider {
     if (this.store && this.runId !== undefined) this.store.recordInput(this.runId, world.state.tick, kind, agentId, payload);
   }
 
-  /** Párhuzamosan futtat lakónkénti feladatokat; keretnél szünet vagy tartalék. */
-  private async each<I, T>(agents: I[], fn: (a: I) => Promise<T>, fallback: (a: I) => T | undefined) {
-    let budgetHit: string | undefined;
-    const results = await Promise.all(
-      agents.map(async (a) => {
-        try {
-          return [a, await fn(a)] as const;
-        } catch (e) {
-          if (!(e instanceof BudgetExceededError)) throw e;
-          budgetHit = e.message;
-          return [a, fallback(a)] as const;
-        }
-      }),
-    );
-    if (budgetHit && this.opts.onBudget === "pause") throw new BudgetExceededError(budgetHit);
-    return results;
+  /** Párhuzamosan futtat lakónkénti feladatokat. */
+  private async each<I, T>(items: I[], fn: (a: I) => Promise<T>, _fallback?: (a: I) => T | undefined) {
+    return Promise.all(items.map(async (a) => [a, await fn(a)] as const));
   }
 
   async collect(world: World): Promise<ExternalInputs> {
@@ -179,7 +164,7 @@ export class LiveMind implements InputProvider {
     return inputs;
   }
 
-  /** Az Isten-mód szöveg értelmezése; keret vagy hiba esetén a kulcsszavas (mock) értelmezés. */
+  /** Az Isten-mód szöveg értelmezése; hiba esetén a kulcsszavas értelmezés. */
   async interpretGod(text: string, world: World) {
     const schema = godSchema(world.state.agents.map((a) => a.id), world.map.locations.map((l) => l.id));
     try {
@@ -199,7 +184,7 @@ export class LiveMind implements InputProvider {
       );
       if (res.data) return toGodEvent(res.data, text);
     } catch {
-      // keret: ettől még megtörténik az esemény
+      // hiba: ettől még megtörténik az esemény
     }
     return toGodEvent(mockGod(text, world), text);
   }
@@ -248,7 +233,6 @@ export class LiveMind implements InputProvider {
       (d) => validateDecision(d, agent, world.state),
     );
     if (res.data) return toDesired(res.data);
-    this.gateway.noteFallback();
     return fallbackDecision(agent, world);
   }
 

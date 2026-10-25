@@ -8,7 +8,7 @@ import { handleClientMessage, initMessage, tickMessage } from "./session";
 import { SummaryService } from "./summary/service";
 
 /**
- * Böngészős demó: a teljes szimuláció a böngészőben fut (mock LLM-mel, szerver és API-kulcs nélkül).
+ * Böngészős változat: a teljes szimuláció a böngészőben fut, szerver nélkül.
  * WebSocket-szerű felületet ad, így a viewer változtatás nélkül használhatja.
  */
 export class LocalSocket {
@@ -22,13 +22,9 @@ export class LocalSocket {
   private mind: LiveMind;
 
   constructor(seed = "falu", secondsPerDay = 120) {
-    const gateway = new LlmGateway(new MockClient(), { routine: "claude-haiku-5-5", strong: "claude-sonnet-5-5" }, {
-      maxUsdTotal: 5,
-      maxUsdPerRealDay: 2,
-      maxCallsPerSimDay: 600,
-    });
-    this.mind = new LiveMind(gateway, { llmAgents: "all", onBudget: "autopilot" });
-    this.runner = new Runner({ world: createWorld(seed, VILLAGERS), secondsPerDay, inputs: this.mind, llmStats: () => gateway.stats });
+    const gateway = new LlmGateway(new MockClient());
+    this.mind = new LiveMind(gateway, { llmAgents: "all" });
+    this.runner = new Runner({ world: createWorld(seed, VILLAGERS), secondsPerDay, inputs: this.mind });
     this.summaries = new SummaryService(this.runner, gateway);
     this.runner.onTick((r, w) => this.emit(tickMessage(this.runner, r, w)));
     this.runner.onStatus(() => this.emit({ type: "status", status: this.runner.status() }));

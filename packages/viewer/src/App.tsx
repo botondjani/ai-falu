@@ -4,7 +4,7 @@ import { VillageRenderer } from "./renderer";
 import { useSim, type TickFrame } from "./useSim";
 import { RelationGraph } from "./Graph";
 import { ProfileDrawer } from "./Profile";
-import type { AgentView, ClientMessage, LlmStats, MarketView, Summary } from "@falu/sim";
+import type { AgentView, ClientMessage, MarketView, Summary } from "@falu/sim";
 
 /** Ezek túl gyakoriak a feedhez. */
 const QUIET = new Set(["earned", "produced", "sold", "arrived"]);
@@ -110,7 +110,6 @@ export function App() {
         </section>
 
         {state.status?.godMode && <GodPanel agents={state.agents} send={send} />}
-        <CostPanel llm={state.llm} />
         <MarketPanel market={state.market} />
 
         <section className="agents">
@@ -166,35 +165,12 @@ export function App() {
 
 const SOURCE_ICON: Record<DecisionSource, string> = { llm: "🧠", auto: "⚙", fallback: "⚠", terv: "📋", isten: "⚡" };
 const SOURCE_TITLE: Record<DecisionSource, string> = {
-  llm: "LLM döntött",
+  llm: "saját döntés",
   auto: "autopilot (szabály)",
   fallback: "LLM-hiba, autopilot-tartalék",
   terv: "a napi terv szerint",
   isten: "Isten-mód esemény miatt",
 };
-
-function CostPanel({ llm }: { llm: LlmStats | null }) {
-  if (!llm) return null;
-  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
-  return (
-    <section className="cost">
-      <h2>LLM költség {llm.mock && <span className="badge">mock</span>}</h2>
-      <div className="cost-main">
-        <b>${llm.usd.toFixed(4)}</b>
-        {llm.mock && <span className="muted small"> (valódi API-val kb. ${llm.estimatedUsd.toFixed(4)})</span>}
-      </div>
-      <div className="small muted">
-        {llm.calls} hívás · ma {llm.callsToday}/{llm.budget.maxCallsPerSimDay} · {fmt(llm.inputTokens)} be / {fmt(llm.outputTokens)} ki /{" "}
-        {fmt(llm.cacheReadTokens)} cache
-      </div>
-      <div className="small muted">
-        keret: ${llm.budget.maxUsdTotal} össz., ${llm.budget.maxUsdPerRealDay}/nap
-        {llm.failures > 0 && ` · ${llm.failures} hiba, ${llm.fallbacks} tartalék`}
-      </div>
-      {llm.budgetExceeded && <div className="paused">⛔ {llm.budgetExceeded}</div>}
-    </section>
-  );
-}
 
 const GOD_EXAMPLES = ["Hatalmas vihar jön", "Egy idegen érkezik a faluba", "Bál lesz a téren", "Tűz üt ki a boltban", "Valaki kincset talál a folyóparton"];
 
@@ -275,7 +251,6 @@ function SummaryModal({ summary, onClose }: { summary: Summary | "loading"; onCl
           <>
             <div className="muted small">
               {formatTime(tickToTime(summary.fromTick))} – {formatTime(tickToTime(summary.toTick))}
-              {summary.mock && " · mock"}
             </div>
             <p className="story">{summary.story}</p>
             {summary.highlights.length > 0 && (

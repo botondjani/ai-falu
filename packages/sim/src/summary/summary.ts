@@ -43,7 +43,7 @@ function span(fromTick: number, toTick: number) {
   return `${formatTime(tickToTime(fromTick))} – ${formatTime(tickToTime(toTick))}`;
 }
 
-/** "Amíg nem néztél oda": tények kinyerése, majd egy (Sonnet) hívás az elbeszéléshez. Hibánál sablonos változat. */
+/** "Amíg nem néztél oda": tények kinyerése, majd elbeszélés generálása. Hibánál sablonos változat. */
 export async function summarize(
   world: World,
   events: SimEvent[],

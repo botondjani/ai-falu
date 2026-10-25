@@ -1,8 +1,7 @@
 import type { ActivityKind, DecisionSource, Inventory, Needs, Point, SimEvent, TileMap } from "@falu/core";
-import type { LlmStats } from "./llm/gateway";
 import type { Summary } from "./summary/summary";
 
-export type { LlmStats, Summary };
+export type { Summary };
 
 /** A viewernek küldött lakó-nézet (csak ami a megjelenítéshez kell). */
 export interface AgentView {
@@ -30,7 +29,6 @@ export interface SimStatus {
   /** Elérhető-e az Isten-mód (visszajátszásnál nem). */
   godMode?: boolean;
   runId?: number;
-  llm?: LlmStats;
 }
 
 export interface MarketView {
@@ -79,7 +77,6 @@ export type ServerMessage =
       agents: AgentView[];
       moves: Record<string, Point[]>;
       events: SimEvent[];
-      llm?: LlmStats;
       market: MarketView;
     }
   | { type: "status"; status: SimStatus }

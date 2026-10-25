@@ -30,7 +30,6 @@ export function tickMessage(runner: Runner, r: StepResult, world: World): Server
     agents: runner.agentViews(),
     moves: r.moves,
     events: r.events,
-    llm: runner.llmStats(),
     market: runner.market(),
   };
 }

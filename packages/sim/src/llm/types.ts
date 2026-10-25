@@ -2,13 +2,6 @@ import type { z } from "zod";
 
 export type ModelTier = "routine" | "strong";
 
-export interface LlmUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-}
-
 export interface SystemBlock {
   text: string;
   /** Cache breakpoint a blokk végén (a stabil prefix vége). */
@@ -30,13 +23,12 @@ export interface LlmRequest<T> {
 }
 
 export interface RawCompletion {
-  /** A modell JSON-kimenete (még nem validálva a sémán túli szabályokra). */
+  /** A generált JSON-kimenet (még nem validálva). */
   json: unknown;
-  usage: LlmUsage;
-  model: string;
 }
 
+/** A lakók "elméjét" adó generátor. Jelenleg a beépített, szabály- és sablonalapú (mock) generátor. */
 export interface LlmClient {
   readonly mock: boolean;
-  complete<T>(req: LlmRequest<T>, model: string, extraUser?: string): Promise<RawCompletion>;
+  complete<T>(req: LlmRequest<T>, extraUser?: string): Promise<RawCompletion>;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { SimEvent, TileMap } from "@falu/core";
-import type { AgentView, ClientMessage, LlmStats, MarketView, ProfileView, ServerMessage, SimStatus, Summary } from "@falu/sim";
+import type { AgentView, ClientMessage, MarketView, ProfileView, ServerMessage, SimStatus, Summary } from "@falu/sim";
 
 export interface TickFrame {
   tick: number;
@@ -17,7 +17,6 @@ export interface SimState {
   agents: AgentView[];
   events: SimEvent[];
   status: SimStatus | null;
-  llm: LlmStats | null;
   market: MarketView | null;
   /** null: nincs nyitva; "loading": készül; különben a kész összefoglaló. */
   summary: Summary | "loading" | null;
@@ -39,7 +38,6 @@ export function useSim(onFrame: (f: TickFrame) => void) {
     agents: [],
     events: [],
     status: null,
-    llm: null,
     market: null,
     summary: null,
     profile: null,
@@ -71,7 +69,6 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             agents: msg.agents,
             events: msg.recentEvents.slice(-MAX_EVENTS),
             status: msg.status,
-            llm: msg.status.llm ?? null,
             market: msg.market,
             summary: msg.tick - msg.lastSeenTick >= SUMMARY_MIN_TICKS ? "loading" : null,
             profile: null,
@@ -84,7 +81,6 @@ export function useSim(onFrame: (f: TickFrame) => void) {
             ...s,
             tick: msg.tick,
             agents: msg.agents,
-            llm: msg.llm ?? s.llm,
             market: msg.market,
             events: msg.events.length ? [...s.events, ...msg.events].slice(-MAX_EVENTS) : s.events,
           }));
@@ -93,7 +89,7 @@ export function useSim(onFrame: (f: TickFrame) => void) {
         } else if (msg.type === "summary") {
           setState((s) => ({ ...s, summary: msg.summary }));
         } else if (msg.type === "status") {
-          setState((s) => ({ ...s, status: msg.status, llm: msg.status.llm ?? s.llm }));
+          setState((s) => ({ ...s, status: msg.status }));
         }
       };
     };
